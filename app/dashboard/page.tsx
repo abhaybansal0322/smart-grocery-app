@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
+import { useBox } from '@/lib/box-context';
 import ProtectedRoute from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,9 +28,12 @@ import Link from 'next/link';
 
 export default function Dashboard() {
   const { user, token, logout } = useAuth();
+  const { currentBox, refreshBox, isLoading: boxLoading } = useBox();
   const [recommendations, setRecommendations] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+
+
 
   const [nextBox, setNextBox] = useState({
     date: 'This Saturday',
@@ -43,8 +47,39 @@ export default function Dashboard() {
     if (token) {
       fetchRecommendations();
       fetchSubscription();
+      refreshBox();
     }
-  }, [token]);
+  }, [token, refreshBox]);
+
+  // Update nextBox when currentBox changes
+  useEffect(() => {
+    if (currentBox) {
+      setNextBox({
+        date: new Date(currentBox.deliveryDate).toLocaleDateString('en-US', { 
+          weekday: 'long',
+          month: 'short',
+          day: 'numeric'
+        }),
+        status: currentBox.status,
+        items: currentBox.items.length,
+        estimated: `$${(currentBox.total / 100).toFixed(0)}`
+      });
+    }
+  }, [currentBox]);
+
+  // Refresh box data when page becomes visible (user returns from customize page)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && token) {
+        refreshBox();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [token, refreshBox]);
 
   const fetchRecommendations = async () => {
     try {
@@ -85,6 +120,8 @@ export default function Dashboard() {
     }
   };
 
+
+
   const sustainabilityMetrics = {
     wasteReduction: 73,
     carbonSaved: 12.5,
@@ -114,9 +151,9 @@ export default function Dashboard() {
               </span>
             </div>
             <nav className="hidden md:flex space-x-6">
-              <a href="#" className="text-green-600 font-medium">Dashboard</a>
-              <a href="#" className="text-gray-600 hover:text-green-600">My Boxes</a>
-              <a href="#" className="text-gray-600 hover:text-green-600">Preferences</a>
+              <Link href="/dashboard" className="text-green-600 font-medium">Dashboard</Link>
+              <Link href="/my-boxes" className="text-gray-600 hover:text-green-600">My Boxes</Link>
+              <Link href="/preferences" className="text-gray-600 hover:text-green-600">Preferences</Link>
             </nav>
             <div className="flex items-center space-x-4">
               <Button variant="ghost" size="sm">
@@ -215,15 +252,32 @@ export default function Dashboard() {
                     </CardTitle>
                     <CardDescription>Arriving {nextBox.date} • {nextBox.items} items • ~{nextBox.estimated}</CardDescription>
                   </div>
-                  <Button variant="outline" size="sm">
-                    Customize
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Link href="/customize-box">
+                      <Button variant="outline" size="sm">
+                        Customize
+                      </Button>
+                    </Link>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={refreshBox}
+                      disabled={boxLoading}
+                    >
+                      {boxLoading ? 'Loading...' : 'Refresh'}
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
-                  {recommendations.length > 0 ? (
-                    recommendations.slice(0, 3).map((item, index) => (
+                  {boxLoading ? (
+                    <div className="col-span-3 text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-2"></div>
+                      <p className="text-gray-500">Loading your box...</p>
+                    </div>
+                  ) : currentBox && currentBox.items.length > 0 ? (
+                    currentBox.items.slice(0, 3).map((item, index) => (
                       <div key={index} className="text-center">
                         <img 
                           src={item.imageUrl || 'https://via.placeholder.com/64x64?text=Product'} 
@@ -236,7 +290,8 @@ export default function Dashboard() {
                     ))
                   ) : (
                     <div className="col-span-3 text-center py-8">
-                      <p className="text-gray-500">Loading recommendations...</p>
+                      <p className="text-gray-500">Your box is empty</p>
+                      <p className="text-sm text-gray-400">Add items to get started</p>
                     </div>
                   )}
                 </div>
@@ -316,7 +371,9 @@ export default function Dashboard() {
                             />
                           ))}
                         </div>
-                        <Button variant="ghost" size="sm">View</Button>
+                        <Link href="/my-boxes">
+                          <Button variant="ghost" size="sm">View</Button>
+                        </Link>
                       </div>
                     </div>
                   ))}
@@ -375,18 +432,22 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  <Button className="w-full justify-start" variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Items to Next Box
-                  </Button>
+                  <Link href="/customize-box">
+                    <Button className="w-full justify-start" variant="outline">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Items to Next Box
+                    </Button>
+                  </Link>
                   <Button className="w-full justify-start" variant="outline">
                     <Calendar className="h-4 w-4 mr-2" />
                     Change Delivery Date
                   </Button>
-                  <Button className="w-full justify-start" variant="outline">
-                    <Settings className="h-4 w-4 mr-2" />
-                    Update Preferences
-                  </Button>
+                  <Link href="/preferences">
+                    <Button className="w-full justify-start" variant="outline">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Update Preferences
+                    </Button>
+                  </Link>
                   <Link href="/onboarding">
                     <Button className="w-full justify-start" variant="outline">
                       <TrendingUp className="h-4 w-4 mr-2" />
@@ -420,6 +481,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+    </div>
     </ProtectedRoute>
   );
 }
