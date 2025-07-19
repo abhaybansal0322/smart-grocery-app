@@ -85,7 +85,9 @@ export default function Home() {
               <a href="#sustainability" className="text-gray-600 hover:text-green-600 transition-colors">Sustainability</a>
             </nav>
             <div className="flex items-center space-x-4">
-              <Button variant="ghost" className="text-gray-600">Sign In</Button>
+              <Link href="/signin">
+                <Button variant="ghost" className="text-gray-600">Sign In</Button>
+              </Link>
               <Link href="/onboarding">
                 <Button className="bg-gradient-to-r from-green-600 to-blue-600 text-white hover:from-green-700 hover:to-blue-700">
                   Get Started

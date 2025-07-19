@@ -1,0 +1,331 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Profile and preferences
+  profile UserProfile?
+  
+  // Subscriptions and orders
+  subscriptions Subscription[]
+  orders        Order[]
+  
+  // AI learning data
+  preferences   UserPreference[]
+  ratings       Rating[]
+  feedback      Feedback[]
+  
+  // Sustainability tracking
+  sustainabilityMetrics SustainabilityMetric[]
+  
+  // Meal planning
+  mealPlans     MealPlan[]
+}
+
+model UserProfile {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Household information
+  householdSize Int @default(1)
+  
+  // Budget and preferences
+  weeklyBudget Int @default(150) // in cents
+  
+  // Dietary restrictions and allergies
+  dietaryRestrictions Json // ["Vegetarian", "Vegan", "Gluten-Free", etc.]
+  allergies           Json // ["Nuts", "Shellfish", "Eggs", etc.]
+  
+  // Cooking preferences
+  cookingTime Int @default(30) // minutes
+  mealTypes   Json // ["Quick & Easy", "Gourmet Cooking", "Meal Prep", etc.]
+  
+  // Delivery preferences
+  shoppingFrequency      String @default("weekly") // "weekly", "bi-weekly", "monthly"
+  preferredDeliveryDay   String @default("saturday")
+  deliveryMethod         String @default("delivery") // "delivery", "pickup"
+  pickupLocation         String? // store name if pickup
+  
+  // Sustainability preferences
+  sustainabilityImportance Int @default(7) // 1-10 scale
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model UserPreference {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // AI learning data
+  category     String // "proteins", "vegetables", "fruits", "dairy", "grains", "snacks"
+  itemName     String
+  preference   Float @default(0.5) // 0-1 scale, 0 = dislike, 1 = love
+  frequency    Int @default(1) // how often they buy this
+  lastPurchased DateTime?
+  
+  // Seasonal and contextual preferences
+  seasonalPreference Boolean @default(false)
+  priceSensitivity   Float @default(0.5) // 0-1 scale
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@unique([userId, category, itemName])
+}
+
+model Subscription {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Subscription details
+  name        String
+  type        String // "full", "fruits", "vegetables", "proteins", "snacks", "household"
+  status      String @default("active") // "active", "paused", "cancelled"
+  
+  // Frequency and schedule
+  frequency   String @default("weekly") // "weekly", "bi-weekly", "monthly"
+  nextDelivery DateTime
+  
+  // Box configuration
+  maxItems    Int @default(25)
+  maxBudget   Int // in cents
+  
+  // AI configuration
+  aiEnabled   Boolean @default(true)
+  customizationLevel String @default("moderate") // "minimal", "moderate", "full"
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  orders Order[]
+}
+
+model Product {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  category    String // "proteins", "vegetables", "fruits", "dairy", "grains", "snacks", "household"
+  subcategory String? // "organic", "local", "seasonal", etc.
+  
+  // Pricing
+  price       Int // in cents
+  unit        String // "lb", "oz", "piece", "pack"
+  
+  // Inventory and availability
+  inStock     Boolean @default(true)
+  stockLevel  Int @default(100)
+  
+  // Sustainability info
+  isOrganic   Boolean @default(false)
+  isLocal     Boolean @default(false)
+  isSeasonal  Boolean @default(false)
+  carbonFootprint Float? // kg CO2 equivalent
+  
+  // Nutritional info
+  calories    Int?
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  
+  // Images and branding
+  imageUrl    String?
+  brand       String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  orderItems OrderItem[]
+  ratings    Rating[]
+}
+
+model Order {
+  id            String @id @default(cuid())
+  userId        String
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subscriptionId String?
+  subscription  Subscription? @relation(fields: [subscriptionId], references: [id])
+  
+  // Order details
+  status        String @default("pending") // "pending", "confirmed", "preparing", "shipped", "delivered", "cancelled"
+  totalAmount   Int // in cents
+  
+  // Delivery information
+  deliveryDate  DateTime
+  deliveryMethod String // "delivery", "pickup"
+  deliveryAddress String?
+  pickupLocation String?
+  
+  // AI and customization
+  aiGenerated   Boolean @default(true)
+  customizationLevel String @default("moderate")
+  
+  // Sustainability metrics
+  carbonSaved   Float? // kg CO2
+  wasteReduction Float? // percentage
+  localItems    Int @default(0)
+  organicItems  Int @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  // Relations
+  items    OrderItem[]
+  feedback Feedback?
+}
+
+model OrderItem {
+  id        String @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  
+  quantity  Int
+  unitPrice Int // in cents
+  totalPrice Int // in cents
+  
+  // AI recommendation data
+  aiRecommended Boolean @default(false)
+  confidence    Float? // 0-1 scale
+  reason        String? // why AI recommended this
+  
+  createdAt DateTime @default(now())
+}
+
+model Rating {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  
+  rating    Int // 1-5 stars
+  review    String?
+  
+  createdAt DateTime @default(now())
+  
+  @@unique([userId, productId])
+}
+
+model Feedback {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orderId   String @unique
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  // Overall feedback
+  overallRating Int // 1-5 stars
+  satisfaction   Int // 1-10 scale
+  
+  // Specific feedback
+  varietyRating    Int? // 1-5
+  qualityRating    Int? // 1-5
+  valueRating      Int? // 1-5
+  deliveryRating   Int? // 1-5
+  
+  // Comments
+  comments         String?
+  suggestions      String?
+  
+  // AI learning data
+  wouldOrderAgain  Boolean?
+  favoriteItems    Json // product names
+  dislikedItems    Json // product names
+  
+  createdAt DateTime @default(now())
+}
+
+model SustainabilityMetric {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Metrics
+  date              DateTime
+  carbonSaved       Float // kg CO2
+  wasteReduction    Float // percentage
+  localSourcing     Float // percentage
+  organicPercentage Float // percentage
+  packagingScore    Float // 1-10 scale
+  
+  // Calculated from orders
+  totalOrders       Int
+  totalSpent        Int // in cents
+  
+  createdAt DateTime @default(now())
+}
+
+// Recipe and meal planning models
+model Recipe {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  instructions Json
+  ingredients  Json
+  
+  // Nutritional info
+  calories    Int?
+  protein     Float?
+  carbs       Float?
+  fat         Float?
+  
+  // Dietary info
+  dietaryTags Json // ["vegetarian", "vegan", "gluten-free", etc.]
+  
+  // Cooking info
+  prepTime    Int? // minutes
+  cookTime    Int? // minutes
+  servings    Int?
+  
+  // AI and recommendations
+  difficulty  String? // "easy", "medium", "hard"
+  popularity  Float @default(0) // 0-1 scale
+  
+  imageUrl    String?
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MealPlan {
+  id        String @id @default(cuid())
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  weekStart DateTime
+  weekEnd   DateTime
+  
+  // Plan details
+  meals     Json // structured meal plan data
+  
+  // AI generated
+  aiGenerated Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

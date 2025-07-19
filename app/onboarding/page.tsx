@@ -15,6 +15,10 @@ import Link from 'next/link';
 export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState(0);
   const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
     householdSize: 2,
     budget: [150],
     dietaryRestrictions: [] as string[],
@@ -27,6 +31,12 @@ export default function Onboarding() {
   });
 
   const steps = [
+    {
+      title: 'Account Setup',
+      description: 'Create your account',
+      icon: Users,
+      component: AccountStep
+    },
     {
       title: 'Household Information',
       description: 'Tell us about your household',
@@ -72,6 +82,141 @@ export default function Onboarding() {
   };
 
   const progress = ((currentStep + 1) / steps.length) * 100;
+
+  const handleSubmit = async () => {
+    try {
+      // First, register the user
+      const registerResponse = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          householdSize: formData.householdSize,
+          weeklyBudget: formData.budget[0],
+          dietaryRestrictions: formData.dietaryRestrictions,
+          allergies: formData.allergies,
+          cookingTime: formData.cookingTime[0],
+          mealTypes: formData.mealTypes,
+          shoppingFrequency: formData.shoppingFrequency,
+          preferredDeliveryDay: formData.preferredDeliveryDay,
+          deliveryMethod: 'delivery',
+          sustainabilityImportance: formData.sustainabilityImportance[0]
+        }),
+      });
+
+      if (registerResponse.ok) {
+        const registerData = await registerResponse.json();
+        
+        // Login to get the token
+        const loginResponse = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+          }),
+        });
+
+        if (loginResponse.ok) {
+          const loginData = await loginResponse.json();
+          
+          // Create a subscription
+          const subscriptionResponse = await fetch('/api/subscriptions/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${loginData.token}`,
+            },
+            body: JSON.stringify({
+              type: 'full',
+              frequency: formData.shoppingFrequency,
+              maxItems: 25,
+              maxBudget: formData.budget[0] * 100, // Convert to cents
+              aiEnabled: true,
+              customizationLevel: 'moderate'
+            }),
+          });
+
+          if (subscriptionResponse.ok) {
+            // Store the token and redirect
+            localStorage.setItem('authToken', loginData.token);
+            window.location.href = '/dashboard';
+          } else {
+            console.error('Subscription creation failed');
+            // Still redirect to dashboard even if subscription creation fails
+            localStorage.setItem('authToken', loginData.token);
+            window.location.href = '/dashboard';
+          }
+        } else {
+          alert('Login failed after registration. Please try signing in manually.');
+          window.location.href = '/signin';
+        }
+      } else {
+        const error = await registerResponse.json();
+        alert('Registration failed: ' + error.error);
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Registration failed. Please try again.');
+    }
+  };
+
+  function AccountStep() {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label className="text-base font-medium">First Name</Label>
+            <Input
+              type="text"
+              value={formData.firstName}
+              onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+              placeholder="Enter your first name"
+              className="mt-2"
+            />
+          </div>
+          <div>
+            <Label className="text-base font-medium">Last Name</Label>
+            <Input
+              type="text"
+              value={formData.lastName}
+              onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+              placeholder="Enter your last name"
+              className="mt-2"
+            />
+          </div>
+        </div>
+        <div>
+          <Label className="text-base font-medium">Email Address</Label>
+          <Input
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({...formData, email: e.target.value})}
+            placeholder="Enter your email address"
+            className="mt-2"
+          />
+        </div>
+        <div>
+          <Label className="text-base font-medium">Password</Label>
+          <Input
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData({...formData, password: e.target.value})}
+            placeholder="Create a password"
+            className="mt-2"
+          />
+          <p className="text-sm text-gray-600 mt-1">Must be at least 8 characters long</p>
+        </div>
+      </div>
+    );
+  }
 
   function HouseholdStep() {
     return (
@@ -330,11 +475,12 @@ export default function Onboarding() {
               <span className="font-medium capitalize">{formData.preferredDeliveryDay}</span>
             </div>
           </div>
-          <Link href="/dashboard">
-            <Button className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white">
-              Go to Dashboard
-            </Button>
-          </Link>
+          <Button 
+            onClick={handleSubmit}
+            className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white"
+          >
+            Complete Setup & Go to Dashboard
+          </Button>
         </Card>
       </div>
     );

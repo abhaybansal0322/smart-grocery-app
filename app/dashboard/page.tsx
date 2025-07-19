@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/lib/auth-context';
+import ProtectedRoute from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +26,11 @@ import {
 import Link from 'next/link';
 
 export default function Dashboard() {
+  const { user, token, logout } = useAuth();
+  const [recommendations, setRecommendations] = useState([]);
+  const [subscription, setSubscription] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [nextBox, setNextBox] = useState({
     date: 'This Saturday',
     status: 'confirmed',
@@ -31,29 +38,52 @@ export default function Dashboard() {
     estimated: '$142'
   });
 
-  const recommendations = [
-    {
-      item: 'Organic Quinoa',
-      reason: 'Based on your healthy eating preferences',
-      confidence: 95,
-      price: '$8.99',
-      image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=100&h=100&fit=crop&crop=center'
-    },
-    {
-      item: 'Fresh Salmon Fillets',
-      reason: 'High protein, matches your fitness goals',
-      confidence: 88,
-      price: '$16.99',
-      image: 'https://images.pexels.com/photos/1683545/pexels-photo-1683545.jpeg?auto=compress&cs=tinysrgb&w=100'
-    },
-    {
-      item: 'Avocados (6 pack)',
-      reason: 'You buy these weekly',
-      confidence: 92,
-      price: '$5.49',
-      image: 'https://images.pexels.com/photos/916013/pexels-photo-916013.jpeg?auto=compress&cs=tinysrgb&w=100'
+  // Fetch recommendations and subscription data
+  useEffect(() => {
+    if (token) {
+      fetchRecommendations();
+      fetchSubscription();
     }
-  ];
+  }, [token]);
+
+  const fetchRecommendations = async () => {
+    try {
+      const response = await fetch('/api/recommendations', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setRecommendations(data.recommendations);
+        setSubscription(data.subscription);
+      }
+    } catch (error) {
+      console.error('Failed to fetch recommendations:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchSubscription = async () => {
+    try {
+      const response = await fetch('/api/subscriptions', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.subscriptions.length > 0) {
+          setSubscription(data.subscriptions[0]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch subscription:', error);
+    }
+  };
 
   const sustainabilityMetrics = {
     wasteReduction: 73,
@@ -69,7 +99,8 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-emerald-50">
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-emerald-50">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -91,8 +122,13 @@ export default function Dashboard() {
               <Button variant="ghost" size="sm">
                 <Settings className="h-4 w-4" />
               </Button>
+              <Button variant="ghost" size="sm" onClick={logout}>
+                Logout
+              </Button>
               <div className="w-8 h-8 bg-green-600 rounded-full flex items-center justify-center">
-                <span className="text-white text-sm font-medium">S</span>
+                <span className="text-white text-sm font-medium">
+                  {user?.firstName?.charAt(0) || 'U'}
+                </span>
               </div>
             </div>
           </div>
@@ -102,7 +138,9 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto p-4 py-8">
         {/* Welcome Section */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome back, Sarah!</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome back, {user?.firstName || 'User'}!
+          </h1>
           <p className="text-gray-600">Your AI is getting smarter every week. Here's what's happening with your groceries.</p>
         </div>
 
@@ -184,17 +222,23 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-3 gap-4">
-                  {recommendations.slice(0, 3).map((item, index) => (
-                    <div key={index} className="text-center">
-                      <img 
-                        src={item.image} 
-                        alt={item.item}
-                        className="w-16 h-16 rounded-lg mx-auto mb-2 object-cover"
-                      />
-                      <p className="text-sm font-medium">{item.item}</p>
-                      <p className="text-xs text-green-600">{item.price}</p>
+                  {recommendations.length > 0 ? (
+                    recommendations.slice(0, 3).map((item, index) => (
+                      <div key={index} className="text-center">
+                        <img 
+                          src={item.imageUrl || 'https://via.placeholder.com/64x64?text=Product'} 
+                          alt={item.name}
+                          className="w-16 h-16 rounded-lg mx-auto mb-2 object-cover"
+                        />
+                        <p className="text-sm font-medium">{item.name}</p>
+                        <p className="text-xs text-green-600">${(item.price / 100).toFixed(2)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-3 text-center py-8">
+                      <p className="text-gray-500">Loading recommendations...</p>
                     </div>
-                  ))}
+                  )}
                 </div>
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-800">
@@ -216,29 +260,35 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {recommendations.map((rec, index) => (
-                    <div key={index} className="flex items-center space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
-                      <img 
-                        src={rec.image} 
-                        alt={rec.item}
-                        className="w-12 h-12 rounded-lg object-cover"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-medium">{rec.item}</h4>
-                          <span className="text-lg font-semibold text-green-600">{rec.price}</span>
+                  {recommendations.length > 0 ? (
+                    recommendations.map((rec, index) => (
+                      <div key={index} className="flex items-center space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
+                        <img 
+                          src={rec.imageUrl || 'https://via.placeholder.com/48x48?text=Product'} 
+                          alt={rec.name}
+                          className="w-12 h-12 rounded-lg object-cover"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-medium">{rec.name}</h4>
+                            <span className="text-lg font-semibold text-green-600">${(rec.price / 100).toFixed(2)}</span>
+                          </div>
+                          <p className="text-sm text-gray-600">{rec.reason}</p>
+                          <div className="flex items-center mt-2">
+                            <Progress value={rec.confidence} className="flex-1 h-2" />
+                            <span className="text-xs text-gray-500 ml-2">{rec.confidence}% match</span>
+                          </div>
                         </div>
-                        <p className="text-sm text-gray-600">{rec.reason}</p>
-                        <div className="flex items-center mt-2">
-                          <Progress value={rec.confidence} className="flex-1 h-2" />
-                          <span className="text-xs text-gray-500 ml-2">{rec.confidence}% match</span>
-                        </div>
+                        <Button size="sm" variant="outline">
+                          Add
+                        </Button>
                       </div>
-                      <Button size="sm" variant="outline">
-                        Add
-                      </Button>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">Loading recommendations...</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -370,6 +420,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-    </div>
+    </ProtectedRoute>
   );
 }
