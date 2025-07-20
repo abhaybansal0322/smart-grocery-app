@@ -29,6 +29,9 @@ model User {
   subscriptions Subscription[]
   orders        Order[]
   
+  // Current box
+  currentBox    Box?
+  
   // AI learning data
   preferences   UserPreference[]
   ratings       Rating[]
@@ -325,6 +328,27 @@ model MealPlan {
   
   // AI generated
   aiGenerated Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Box {
+  id        String @id @default(cuid())
+  userId    String @unique
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Box items stored as JSON for flexibility
+  items     Json // Array of box items with id, name, quantity, price, category, etc.
+  total     Int // in cents
+  
+  // Delivery and status
+  deliveryDate DateTime
+  status      String @default("customizing") // "customizing", "confirmed", "preparing"
+  
+  // AI and customization info
+  aiGenerated Boolean @default(true)
+  lastModified DateTime @default(now())
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

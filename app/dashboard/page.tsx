@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useBox } from '@/lib/box-context';
+import { useToast } from '@/hooks/use-toast';
 import ProtectedRoute from '@/components/protected-route';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,7 +29,8 @@ import Link from 'next/link';
 
 export default function Dashboard() {
   const { user, token, logout } = useAuth();
-  const { currentBox, refreshBox, isLoading: boxLoading } = useBox();
+  const { currentBox, refreshBox, isLoading: boxLoading, addToBox } = useBox();
+  const { toast } = useToast();
   const [recommendations, setRecommendations] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -334,7 +336,18 @@ export default function Dashboard() {
                             <span className="text-xs text-gray-500 ml-2">{rec.confidence}% match</span>
                           </div>
                         </div>
-                        <Button size="sm" variant="outline">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            addToBox({ ...rec, id: rec.productId });
+                            toast({
+                              title: 'Added to Box',
+                              description: `${rec.name} has been added to your next box.`,
+                              variant: 'success',
+                            });
+                          }}
+                        >
                           Add
                         </Button>
                       </div>
