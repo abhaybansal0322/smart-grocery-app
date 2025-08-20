@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { useBox } from '@/lib/box-context';
 import { useToast } from '@/hooks/use-toast';
@@ -31,8 +31,8 @@ export default function Dashboard() {
   const { user, token, logout } = useAuth();
   const { currentBox, refreshBox, isLoading: boxLoading, addToBox } = useBox();
   const { toast } = useToast();
-  const [recommendations, setRecommendations] = useState([]);
-  const [subscription, setSubscription] = useState(null);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
+  const [subscription, setSubscription] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
 
@@ -43,15 +43,6 @@ export default function Dashboard() {
     items: 24,
     estimated: '$142'
   });
-
-  // Fetch recommendations and subscription data
-  useEffect(() => {
-    if (token) {
-      fetchRecommendations();
-      fetchSubscription();
-      refreshBox();
-    }
-  }, [token, refreshBox]);
 
   // Update nextBox when currentBox changes
   useEffect(() => {
@@ -83,7 +74,7 @@ export default function Dashboard() {
     };
   }, [token, refreshBox]);
 
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     try {
       const response = await fetch('/api/recommendations', {
         headers: {
@@ -101,9 +92,9 @@ export default function Dashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
-  const fetchSubscription = async () => {
+  const fetchSubscription = useCallback(async () => {
     try {
       const response = await fetch('/api/subscriptions', {
         headers: {
@@ -120,9 +111,16 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Failed to fetch subscription:', error);
     }
-  };
+  }, [token]);
 
-
+  // Fetch recommendations and subscription data
+  useEffect(() => {
+    if (token) {
+      fetchRecommendations();
+      fetchSubscription();
+      refreshBox();
+    }
+  }, [token, refreshBox, fetchRecommendations, fetchSubscription]);
 
   const sustainabilityMetrics = {
     wasteReduction: 73,
@@ -180,7 +178,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome back, {user?.firstName || 'User'}!
           </h1>
-          <p className="text-gray-600">Your AI is getting smarter every week. Here's what's happening with your groceries.</p>
+          <p className="text-gray-600">Your AI is getting smarter every week. Here&apos;s what&apos;s happening with your groceries.</p>
         </div>
 
         {/* Quick Stats */}
@@ -300,7 +298,7 @@ export default function Dashboard() {
                 <div className="mt-4 p-4 bg-blue-50 rounded-lg">
                   <p className="text-sm text-blue-800">
                     <Brain className="h-4 w-4 inline mr-1" />
-                    AI improved your box based on last week's feedback. Added more protein options!
+                    AI improved your box based on last week&apos;s feedback. Added more protein options!
                   </p>
                 </div>
               </CardContent>
@@ -344,7 +342,7 @@ export default function Dashboard() {
                             toast({
                               title: 'Added to Box',
                               description: `${rec.name} has been added to your next box.`,
-                              variant: 'success',
+                              variant: 'default',
                             });
                           }}
                         >
@@ -431,7 +429,7 @@ export default function Dashboard() {
                   </div>
                   <div className="pt-2 border-t">
                     <p className="text-sm text-green-600 font-medium">
-                      🌱 You've saved {sustainabilityMetrics.carbonSaved} lbs of CO2 this month!
+                      🌱 You&apos;ve saved {sustainabilityMetrics.carbonSaved} lbs of CO2 this month!
                     </p>
                   </div>
                 </div>

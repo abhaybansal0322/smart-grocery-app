@@ -1,82 +1,162 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { aiEngine } from '@/lib/ai-recommendations'
-import { verifyToken } from '@/lib/auth'
+import { NextRequest, NextResponse } from 'next/server';
+import { verifyToken } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get token from Authorization header
-    const authHeader = request.headers.get('authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
-    }
-
-    const token = authHeader.substring(7)
-    const payload = verifyToken(token)
+    console.log('Recommendations API called');
+    const token = request.headers.get('authorization')?.replace('Bearer ', '');
     
-    if (!payload) {
-      return NextResponse.json(
-        { error: 'Invalid token' },
-        { status: 401 }
-      )
+    if (!token) {
+      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
     }
 
-    // Get user profile
+    const decoded = verifyToken(token);
+    if (!decoded) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    const userId = decoded.userId;
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '12');
+    const category = searchParams.get('category');
+
+    // Get user profile and preferences
     const userProfile = await prisma.userProfile.findUnique({
-      where: { userId: payload.userId }
-    })
+      where: { userId },
+      select: {
+        dietaryRestrictions: true,
+        allergies: true,
+        sustainabilityImportance: true,
+        weeklyBudget: true
+      }
+    });
 
     if (!userProfile) {
-      return NextResponse.json(
-        { error: 'User profile not found' },
-        { status: 404 }
-      )
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    // Get active subscription
-    const subscription = await prisma.subscription.findFirst({
-      where: {
-        userId: payload.userId,
-        status: 'active'
-      }
-    })
+    // Get user preferences
+    const userPreferences = await prisma.userPreference.findMany({
+      where: { userId },
+      orderBy: { preference: 'desc' },
+      take: 20
+    });
 
-    if (!subscription) {
-      return NextResponse.json(
-        { error: 'No active subscription found' },
-        { status: 404 }
-      )
+    // Build recommendation query
+    const where: any = {
+      inStock: true
+    };
+
+    if (category) {
+      where.category = category;
     }
 
-    // Generate recommendations
-    const recommendations = await aiEngine.generateRecommendations({
-      userId: payload.userId,
-      budget: subscription.maxBudget,
-      maxItems: subscription.maxItems,
-      dietaryRestrictions: userProfile.dietaryRestrictions,
-      allergies: userProfile.allergies,
-      sustainabilityImportance: userProfile.sustainabilityImportance
-    })
-
-    return NextResponse.json({
-      recommendations,
-      subscription: {
-        id: subscription.id,
-        type: subscription.type,
-        maxItems: subscription.maxItems,
-        maxBudget: subscription.maxBudget,
-        nextDelivery: subscription.nextDelivery
+    // Filter out products with user allergies
+    if (userProfile.allergies && Array.isArray(userProfile.allergies)) {
+      const allergies = userProfile.allergies as string[];
+      if (allergies.length > 0) {
+        // This is a simplified allergy filter - in production you'd want more sophisticated matching
+        where.NOT = {
+          OR: allergies.map(allergy => ({
+            name: { contains: allergy, mode: 'insensitive' }
+          }))
+        };
       }
-    })
+    }
+
+    // Get recommended products based on preferences and sustainability
+    const recommendedProducts = await prisma.product.findMany({
+      where,
+      take: limit,
+      orderBy: [
+        { isOrganic: 'desc' },
+        { isLocal: 'desc' },
+        { isSeasonal: 'desc' },
+        { stockLevel: 'desc' }
+      ],
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        category: true,
+        subcategory: true,
+        price: true,
+        unit: true,
+        isOrganic: true,
+        isLocal: true,
+        isSeasonal: true,
+        imageUrl: true,
+        brand: true,
+        stockLevel: true,
+        calories: true,
+        protein: true,
+        carbs: true,
+        fat: true,
+        carbonFootprint: true
+      }
+    });
+
+    // Transform and score products
+    const scoredProducts = recommendedProducts.map((product: any) => {
+      let score = 0;
+      
+      // Base score from user preferences
+      const preference = userPreferences.find(p => 
+        p.category === product.category || 
+        p.itemName.toLowerCase().includes(product.name.toLowerCase())
+      );
+      
+      if (preference) {
+        score += preference.preference * 10;
+      }
+
+      // Sustainability bonus
+      if (product.isOrganic) score += 2;
+      if (product.isLocal) score += 2;
+      if (product.isSeasonal) score += 1;
+      
+      // Carbon footprint bonus (lower is better)
+      if (product.carbonFootprint && product.carbonFootprint < 1) score += 3;
+      else if (product.carbonFootprint && product.carbonFootprint < 2) score += 2;
+
+      // Budget consideration
+      const priceInDollars = product.price / 100;
+      const weeklyBudget = userProfile.weeklyBudget / 100;
+      if (priceInDollars <= weeklyBudget * 0.1) score += 1; // Good price relative to budget
+
+      return {
+        ...product,
+        price: priceInDollars,
+        unitPrice: priceInDollars,
+        recommendationScore: score,
+        carbonFootprint: product.carbonFootprint || 0
+      };
+    });
+
+    // Sort by recommendation score
+    scoredProducts.sort((a, b) => b.recommendationScore - a.recommendationScore);
+
+    console.log(`Recommendations API - Returning ${scoredProducts.length} products for user ${userId}`);
+    
+    return NextResponse.json({ 
+      products: scoredProducts,
+      userProfile: {
+        dietaryRestrictions: userProfile.dietaryRestrictions,
+        sustainabilityImportance: userProfile.sustainabilityImportance,
+        weeklyBudget: userProfile.weeklyBudget / 100
+      },
+      message: 'Recommendations retrieved successfully' 
+    });
 
   } catch (error) {
-    console.error('Recommendations error:', error)
+    console.error('Error fetching recommendations:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Internal server error', details: errorMessage }, 
       { status: 500 }
-    )
+    );
   }
 } 

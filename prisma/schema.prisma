@@ -9,12 +9,12 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
   email     String   @unique
   password  String
   firstName String
@@ -45,7 +45,7 @@ model User {
 }
 
 model UserProfile {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String @unique
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -77,7 +77,7 @@ model UserProfile {
 }
 
 model UserPreference {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -99,7 +99,7 @@ model UserPreference {
 }
 
 model Subscription {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -127,7 +127,7 @@ model Subscription {
 }
 
 model Product {
-  id          String @id @default(cuid())
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
   category    String // "proteins", "vegetables", "fruits", "dairy", "grains", "snacks", "household"
@@ -166,7 +166,7 @@ model Product {
 }
 
 model Order {
-  id            String @id @default(cuid())
+  id            String @id @default(auto()) @map("_id") @db.ObjectId
   userId        String
   user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   subscriptionId String?
@@ -201,7 +201,7 @@ model Order {
 }
 
 model OrderItem {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   orderId   String
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
   productId String
@@ -220,7 +220,7 @@ model OrderItem {
 }
 
 model Rating {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   productId String
@@ -235,7 +235,7 @@ model Rating {
 }
 
 model Feedback {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   orderId   String @unique
@@ -264,7 +264,7 @@ model Feedback {
 }
 
 model SustainabilityMetric {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -285,7 +285,7 @@ model SustainabilityMetric {
 
 // Recipe and meal planning models
 model Recipe {
-  id          String @id @default(cuid())
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
   name        String
   description String?
   instructions Json
@@ -316,7 +316,7 @@ model Recipe {
 }
 
 model MealPlan {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   
@@ -334,7 +334,7 @@ model MealPlan {
 }
 
 model Box {
-  id        String @id @default(cuid())
+  id        String @id @default(auto()) @map("_id") @db.ObjectId
   userId    String @unique
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   

@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { CheckCircle, ShoppingCart, Brain, Truck, Leaf, Clock, Users, Star } from 'lucide-react';
 import Link from 'next/link';
+import FeaturedProducts from '@/components/featured-products';
+import SustainabilityStats from '@/components/sustainability-stats';
 
 export default function Home() {
   const [activeFeature, setActiveFeature] = useState(0);
@@ -159,6 +161,9 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Featured Products */}
+      <FeaturedProducts title="Fresh from Our Partners" limit={8} />
+
       {/* Features Section */}
       <section id="features" className="py-20 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
@@ -235,24 +240,27 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Sustainability Stats */}
+      <SustainabilityStats />
+
       {/* Testimonials */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-white/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">What Our Customers Say</h2>
-            <p className="text-lg text-gray-600">
-              Join thousands of satisfied customers who've transformed their grocery experience
-            </p>
+                                <p className="text-lg text-gray-600">
+                      Join thousands of satisfied customers who&apos;ve transformed their grocery experience
+                    </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {testimonials.map((testimonial, index) => (
               <Card key={index} className="p-6 hover:shadow-lg transition-shadow">
-                <div className="flex items-center mb-4">
+                                <div className="flex items-center mb-4">
                   {[...Array(testimonial.rating)].map((_, i) => (
                     <Star key={i} className="h-5 w-5 text-yellow-400 fill-current" />
                   ))}
                 </div>
-                <p className="text-gray-600 mb-4 italic">"{testimonial.content}"</p>
+                                        <p className="text-gray-600 mb-4 italic">&ldquo;{testimonial.content}&rdquo;</p>
                 <div>
                   <p className="font-semibold">{testimonial.name}</p>
                   <p className="text-sm text-gray-500">{testimonial.role}</p>

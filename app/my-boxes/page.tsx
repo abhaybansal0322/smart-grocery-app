@@ -264,7 +264,7 @@ export default function MyBoxes() {
               <Card>
                 <CardHeader>
                   <CardTitle>Favorite Items</CardTitle>
-                  <CardDescription>Items you've rated highly</CardDescription>
+                  <CardDescription>Items you&apos;ve rated highly</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -22,33 +22,101 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Mock products data
-    const mockProducts = [
-      { id: 5, name: 'Avocados', price: 450, category: 'fruits', imageUrl: 'https://via.placeholder.com/64x64?text=Avocado', organic: true },
-      { id: 6, name: 'Greek Yogurt', price: 580, category: 'dairy', imageUrl: 'https://via.placeholder.com/64x64?text=Yogurt', organic: false },
-      { id: 7, name: 'Sweet Potatoes', price: 320, category: 'vegetables', imageUrl: 'https://via.placeholder.com/64x64?text=Potato', organic: true },
-      { id: 8, name: 'Almond Milk', price: 420, category: 'dairy', imageUrl: 'https://via.placeholder.com/64x64?text=Milk', organic: true },
-      { id: 9, name: 'Organic Chicken Breast', price: 1200, category: 'meat', imageUrl: 'https://via.placeholder.com/64x64?text=Chicken', organic: true },
-      { id: 10, name: 'Mixed Berries', price: 680, category: 'fruits', imageUrl: 'https://via.placeholder.com/64x64?text=Berries', organic: true },
-      { id: 11, name: 'Quinoa', price: 450, category: 'grains', imageUrl: 'https://via.placeholder.com/64x64?text=Quinoa', organic: false },
-      { id: 12, name: 'Broccoli', price: 380, category: 'vegetables', imageUrl: 'https://via.placeholder.com/64x64?text=Broccoli', organic: true },
-      { id: 13, name: 'Salmon Fillet', price: 1800, category: 'seafood', imageUrl: 'https://via.placeholder.com/64x64?text=Salmon', organic: false },
-      { id: 14, name: 'Brown Rice', price: 280, category: 'grains', imageUrl: 'https://via.placeholder.com/64x64?text=Rice', organic: true },
-      { id: 15, name: 'Bell Peppers', price: 350, category: 'vegetables', imageUrl: 'https://via.placeholder.com/64x64?text=Peppers', organic: true },
-      { id: 16, name: 'Apples', price: 250, category: 'fruits', imageUrl: 'https://via.placeholder.com/64x64?text=Apples', organic: false }
-    ];
+    // Get query parameters for filtering
+    const { searchParams } = new URL(request.url);
+    const category = searchParams.get('category');
+    const organic = searchParams.get('organic');
+    const local = searchParams.get('local');
+    const minPrice = searchParams.get('minPrice');
+    const maxPrice = searchParams.get('maxPrice');
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const page = parseInt(searchParams.get('page') || '1');
 
-    console.log('Products API - Returning', mockProducts.length, 'products');
+    // Build where clause for filtering
+    const where: any = {
+      inStock: true
+    };
+
+    if (category) {
+      where.category = category;
+    }
+
+    if (organic === 'true') {
+      where.isOrganic = true;
+    }
+
+    if (local === 'true') {
+      where.isLocal = true;
+    }
+
+    if (minPrice) {
+      where.price = { ...where.price, gte: parseInt(minPrice) * 100 }; // Convert to cents
+    }
+
+    if (maxPrice) {
+      where.price = { ...where.price, lte: parseInt(maxPrice) * 100 }; // Convert to cents
+    }
+
+    // Fetch products from database with pagination
+    const skip = (page - 1) * limit;
+    
+    const [products, totalCount] = await Promise.all([
+      prisma.product.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          category: true,
+          subcategory: true,
+          price: true,
+          unit: true,
+          isOrganic: true,
+          isLocal: true,
+          isSeasonal: true,
+          imageUrl: true,
+          brand: true,
+          stockLevel: true,
+          calories: true,
+          protein: true,
+          carbs: true,
+          fat: true
+        }
+      }),
+      prisma.product.count({ where })
+    ]);
+
+    console.log(`Products API - Returning ${products.length} products out of ${totalCount} total`);
+
+    // Transform price from cents to dollars for frontend
+    const transformedProducts = products.map((product: any) => ({
+      ...product,
+      price: product.price / 100, // Convert cents to dollars
+      unitPrice: product.price / 100
+    }));
     
     return NextResponse.json({ 
-      products: mockProducts,
+      products: transformedProducts,
+      pagination: {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit)
+      },
       message: 'Products retrieved successfully' 
     });
 
   } catch (error) {
     console.error('Error fetching products:', error);
+    
+    // Handle error safely with proper type checking
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    
     return NextResponse.json(
-      { error: 'Internal server error' }, 
+      { error: 'Internal server error', details: errorMessage }, 
       { status: 500 }
     );
   }

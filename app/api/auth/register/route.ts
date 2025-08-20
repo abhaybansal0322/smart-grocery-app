@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(validatedData.password)
 
     // Create user and profile in a transaction
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newUser = await tx.user.create({
         data: {
           email: validatedData.email,

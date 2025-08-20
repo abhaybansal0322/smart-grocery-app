@@ -25,8 +25,12 @@ export async function GET() {
     })
   } catch (error) {
     console.error('Database test error:', error)
+    
+    // Handle error safely with proper type checking
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    
     return NextResponse.json(
-      { error: 'Database connection failed', details: error.message },
+      { error: 'Database connection failed', details: errorMessage },
       { status: 500 }
     )
   }

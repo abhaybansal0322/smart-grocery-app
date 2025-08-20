@@ -284,7 +284,7 @@ export default function Preferences() {
                     <div className="mt-4 p-4 bg-orange-50 rounded-lg">
                       <p className="text-sm text-orange-800">
                         <AlertTriangle className="h-4 w-4 inline mr-1" />
-                        We'll never include these items in your boxes
+                        We&apos;ll never include these items in your boxes
                       </p>
                     </div>
                   )}

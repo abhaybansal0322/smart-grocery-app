@@ -249,7 +249,7 @@ export default function Onboarding() {
       <div className="space-y-6">
         <div>
           <Label className="text-base font-medium">Weekly Budget</Label>
-          <p className="text-sm text-gray-600 mb-4">What's your typical weekly grocery budget?</p>
+          <p className="text-sm text-gray-600 mb-4">What&apos;s your typical weekly grocery budget?</p>
           <div className="px-3">
             <Slider
               value={formData.budget}
@@ -497,7 +497,7 @@ export default function Onboarding() {
           <Link href="/" className="text-green-600 hover:text-green-700 text-sm font-medium">
             ← Back to Home
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-4 mb-2">Let's Personalize Your Experience</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mt-4 mb-2">Let&apos;s Personalize Your Experience</h1>
           <p className="text-gray-600">Help us understand your needs so we can provide the best recommendations</p>
         </div>
 
