@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getCollection } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
 
 export async function GET(request: NextRequest) {
@@ -24,16 +24,19 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user with profile
-    const user = await prisma.user.findUnique({
-      where: { id: payload.userId },
-      include: {
-        profile: true,
-        subscriptions: {
-          where: { status: 'active' },
-          take: 1
-        }
-      }
-    })
+    const Users = await getCollection('User')
+    const Profiles = await getCollection('UserProfile')
+    const Subscriptions = await getCollection('Subscription')
+
+    const userDoc = await Users.findOne<any>({ _id: (payload as any).userId } as any)
+    const profile = await Profiles.findOne<any>({ userId: (payload as any).userId } as any)
+    const subscription = await Subscriptions.findOne<any>({ userId: (payload as any).userId, status: 'active' } as any)
+
+    const user = userDoc && {
+      ...userDoc,
+      profile,
+      subscriptions: subscription ? [subscription] : []
+    }
 
     if (!user) {
       return NextResponse.json(
@@ -43,7 +46,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Remove password from response
-    const { password, ...userWithoutPassword } = user
+    const { password, ...userWithoutPassword } = user as any
 
     return NextResponse.json({
       user: userWithoutPassword

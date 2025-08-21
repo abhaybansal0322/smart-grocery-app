@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,54 +15,39 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // For now, return mock data since we don't have orders in the database yet
-    const mockOrders = [
-      {
-        id: 1,
-        date: '2024-01-15',
-        status: 'delivered',
-        items: 24,
-        total: 14200,
-        rating: 5,
-        itemsList: [
-          { name: 'Organic Bananas', quantity: 2, price: 300 },
-          { name: 'Fresh Spinach', quantity: 1, price: 450 },
-          { name: 'Free-range Eggs', quantity: 1, price: 650 },
-          { name: 'Whole Grain Bread', quantity: 1, price: 380 }
-        ]
-      },
-      {
-        id: 2,
-        date: '2024-01-08',
-        status: 'delivered',
-        items: 22,
-        total: 13800,
-        rating: 4,
-        itemsList: [
-          { name: 'Avocados', quantity: 3, price: 450 },
-          { name: 'Greek Yogurt', quantity: 2, price: 580 },
-          { name: 'Sweet Potatoes', quantity: 2, price: 320 },
-          { name: 'Almond Milk', quantity: 1, price: 420 }
-        ]
-      },
-      {
-        id: 3,
-        date: '2024-01-01',
-        status: 'delivered',
-        items: 25,
-        total: 15600,
-        rating: 5,
-        itemsList: [
-          { name: 'Organic Chicken Breast', quantity: 1, price: 1200 },
-          { name: 'Mixed Berries', quantity: 1, price: 680 },
-          { name: 'Quinoa', quantity: 1, price: 450 },
-          { name: 'Broccoli', quantity: 2, price: 380 }
-        ]
+    const Orders = await getCollection('Order');
+    const OrderItems = await getCollection('OrderItem');
+    const Products = await getCollection('Product');
+
+    const orders = await Orders.find({ userId: decoded.userId } as any)
+      .sort({ deliveryDate: -1 })
+      .toArray();
+
+    const orderIds = orders.map((o: any) => o._id?.toString() || o.id);
+    const items = await OrderItems.find({ orderId: { $in: orderIds } } as any).toArray();
+    const productIds = Array.from(new Set(items.map((it: any) => it.productId)));
+    const products = await Products.find({ id: { $in: productIds } } as any).toArray();
+    const productMap = new Map(products.map((p: any) => [p.id, p]));
+
+    const transformed = orders.map((order: any) => {
+      const orderItemList = items.filter((it: any) => it.orderId === (order.id || order._id?.toString()))
+      return {
+        id: order.id || order._id?.toString(),
+        date: new Date(order.deliveryDate).toISOString().split('T')[0],
+        status: order.status,
+        items: orderItemList.length,
+        total: order.totalAmount,
+        rating: 0,
+        itemsList: orderItemList.map((it: any) => ({
+          name: productMap.get(it.productId)?.name || '',
+          quantity: it.quantity,
+          price: it.unitPrice
+        }))
       }
-    ];
+    });
 
     return NextResponse.json({ 
-      orders: mockOrders,
+      orders: transformed,
       message: 'Orders retrieved successfully' 
     });
 

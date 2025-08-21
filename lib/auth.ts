@@ -1,6 +1,6 @@
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
-import { prisma } from './db'
+import { getCollection } from './db'
 
 // Ensure JWT_SECRET is set
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-key-for-development-only'
@@ -31,19 +31,27 @@ export function verifyToken(token: string): JWTPayload | null {
 }
 
 export async function authenticateUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({
-    where: { email },
-    include: { profile: true }
-  })
+  const users = await getCollection('User')
+  const profiles = await getCollection('UserProfile')
 
-  if (!user) {
-    return null
-  }
+  const userDoc = await users.findOne<any>({ email })
+  if (!userDoc) return null
 
-  const isValid = await verifyPassword(password, user.password)
-  if (!isValid) {
-    return null
+  const isValid = await verifyPassword(password, userDoc.password)
+  if (!isValid) return null
+
+  const profileDoc = await profiles.findOne<any>({ userId: String(userDoc._id) })
+
+  const user = {
+    id: String(userDoc._id),
+    email: userDoc.email,
+    password: userDoc.password,
+    firstName: userDoc.firstName,
+    lastName: userDoc.lastName,
+    createdAt: userDoc.createdAt,
+    updatedAt: userDoc.updatedAt,
+    profile: profileDoc || null
   }
 
   return user
-} 
+}

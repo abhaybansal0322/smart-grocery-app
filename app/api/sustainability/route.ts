@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,57 +16,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Get sustainability statistics
+    const Products = await getCollection('Product');
+
+    // Counts
     const [
       totalProducts,
       organicProducts,
       localProducts,
-      seasonalProducts,
-      avgCarbonFootprint,
-      sustainabilityStats
+      seasonalProducts
     ] = await Promise.all([
-      prisma.product.count({ where: { inStock: true } }),
-      prisma.product.count({ where: { inStock: true, isOrganic: true } }),
-      prisma.product.count({ where: { inStock: true, isLocal: true } }),
-      prisma.product.count({ where: { inStock: true, isSeasonal: true } }),
-      prisma.product.aggregate({
-        where: { 
-          inStock: true,
-          carbonFootprint: { not: null }
-        },
-        _avg: { carbonFootprint: true }
-      }),
-      prisma.product.groupBy({
-        by: ['category'],
-        where: { inStock: true },
-        _count: { id: true },
-        _avg: { carbonFootprint: true }
-      })
+      Products.countDocuments({ inStock: true } as any),
+      Products.countDocuments({ inStock: true, isOrganic: true } as any),
+      Products.countDocuments({ inStock: true, isLocal: true } as any),
+      Products.countDocuments({ inStock: true, isSeasonal: true } as any)
     ]);
+
+    // Average carbon footprint
+    const avgAgg = await Products.aggregate([
+      { $match: { inStock: true, carbonFootprint: { $ne: null } } },
+      { $group: { _id: null, avg: { $avg: '$carbonFootprint' } } }
+    ]).toArray();
+    const avgCarbon = avgAgg[0]?.avg || 0;
+
+    // Stats by category
+    const statsAgg = await Products.aggregate([
+      { $match: { inStock: true } },
+      { $group: { _id: '$category', count: { $sum: 1 }, avgCarbonFootprint: { $avg: '$carbonFootprint' } } },
+      { $project: { _id: 0, category: '$_id', count: 1, avgCarbonFootprint: 1 } }
+    ]).toArray();
+
+    // Top sustainable products
+    const topSustainableProducts = await Products.find({ inStock: true, carbonFootprint: { $ne: null } } as any)
+      .sort({ carbonFootprint: 1 })
+      .limit(10)
+      .project({ id: 1, name: 1, category: 1, carbonFootprint: 1, isOrganic: 1, isLocal: 1, imageUrl: 1, images: 1 } as any)
+      .toArray();
 
     // Calculate percentages
     const organicPercentage = totalProducts > 0 ? (organicProducts / totalProducts) * 100 : 0;
     const localPercentage = totalProducts > 0 ? (localProducts / totalProducts) * 100 : 0;
     const seasonalPercentage = totalProducts > 0 ? (seasonalProducts / totalProducts) * 100 : 0;
-
-    // Get top sustainable products
-    const topSustainableProducts = await prisma.product.findMany({
-      where: { 
-        inStock: true,
-        carbonFootprint: { not: null }
-      },
-      take: 10,
-      orderBy: { carbonFootprint: 'asc' },
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        carbonFootprint: true,
-        isOrganic: true,
-        isLocal: true,
-        imageUrl: true
-      }
-    });
 
     const sustainabilityData = {
       overview: {
@@ -77,14 +66,14 @@ export async function GET(request: NextRequest) {
         organicPercentage: Math.round(organicPercentage * 100) / 100,
         localPercentage: Math.round(localPercentage * 100) / 100,
         seasonalPercentage: Math.round(seasonalPercentage * 100) / 100,
-        averageCarbonFootprint: avgCarbonFootprint._avg.carbonFootprint || 0
+        averageCarbonFootprint: avgCarbon
       },
-      byCategory: sustainabilityStats.map(stat => ({
+      byCategory: statsAgg.map((stat: any) => ({
         category: stat.category,
-        count: stat._count.id,
-        avgCarbonFootprint: stat._avg.carbonFootprint || 0
+        count: stat.count,
+        avgCarbonFootprint: stat.avgCarbonFootprint || 0
       })),
-      topSustainable: topSustainableProducts.map(product => ({
+      topSustainable: topSustainableProducts.map((product: any) => ({
         ...product,
         carbonFootprint: product.carbonFootprint || 0
       }))

@@ -38,7 +38,7 @@ export default function Preferences() {
       lowCarb: false,
       mediterranean: false
     },
-    allergies: [],
+    allergies: [] as string[],
     budget: {
       min: 50,
       max: 200
@@ -105,7 +105,7 @@ export default function Preferences() {
     }
   };
 
-  const toggleDietary = (diet) => {
+  const toggleDietary = (diet: keyof typeof preferences.dietary) => {
     setPreferences(prev => ({
       ...prev,
       dietary: {
@@ -115,7 +115,7 @@ export default function Preferences() {
     }));
   };
 
-  const updateBudget = (values) => {
+  const updateBudget = (values: number[]) => {
     setPreferences(prev => ({
       ...prev,
       budget: {
@@ -125,7 +125,7 @@ export default function Preferences() {
     }));
   };
 
-  const updateSustainability = (type, value) => {
+  const updateSustainability = (type: keyof typeof preferences.sustainability, value: number) => {
     setPreferences(prev => ({
       ...prev,
       sustainability: {
@@ -135,7 +135,7 @@ export default function Preferences() {
     }));
   };
 
-  const updateAILearning = (setting, value) => {
+  const updateAILearning = (setting: keyof typeof preferences.aiLearning, value: any) => {
     setPreferences(prev => ({
       ...prev,
       aiLearning: {
@@ -236,13 +236,13 @@ export default function Preferences() {
                           <div>
                             <p className="font-medium">{option.label}</p>
                             <p className="text-sm text-gray-600">
-                              {preferences.dietary[option.key] ? 'Enabled' : 'Disabled'}
+                              {preferences.dietary[option.key as keyof typeof preferences.dietary] ? 'Enabled' : 'Disabled'}
                             </p>
                           </div>
                         </div>
                         <Switch
-                          checked={preferences.dietary[option.key]}
-                          onCheckedChange={() => toggleDietary(option.key)}
+                          checked={preferences.dietary[option.key as keyof typeof preferences.dietary]}
+                          onCheckedChange={() => toggleDietary(option.key as keyof typeof preferences.dietary)}
                         />
                       </div>
                     ))}

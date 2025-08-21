@@ -1,7 +1,6 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { verifyToken } from './auth';
 
 interface User {
   id: string;
@@ -31,14 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       const storedToken = localStorage.getItem('authToken');
       if (storedToken) {
-        const payload = verifyToken(storedToken);
-        if (payload) {
-          setToken(storedToken);
-          // You might want to fetch user data here
-          fetchUserData(storedToken);
-        } else {
-          localStorage.removeItem('authToken');
-        }
+        setToken(storedToken);
+        fetchUserData(storedToken);
       }
     }
     setIsLoading(false);
@@ -55,6 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         const userData = await response.json();
         setUser(userData.user);
+      } else if (response.status === 401) {
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('authToken');
       }
     } catch (error) {
       console.error('Failed to fetch user data:', error);

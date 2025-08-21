@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,33 +16,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Get unique categories with product counts
-    const categories = await prisma.product.groupBy({
-      by: ['category'],
-      where: { inStock: true },
-      _count: {
-        id: true
-      }
-    });
+    const Products = await getCollection('Product');
+    const agg = await Products.aggregate([
+      { $match: { inStock: true } },
+      { $group: { _id: '$category', count: { $sum: 1 } } },
+      { $project: { _id: 0, category: '$_id', count: 1 } }
+    ]).toArray();
 
     // Get subcategories for each category
     const categoriesWithSubcategories = await Promise.all(
-      categories.map(async (cat) => {
-        const subcategories = await prisma.product.findMany({
-          where: { 
-            category: cat.category,
-            inStock: true 
-          },
-          select: { subcategory: true },
-          distinct: ['subcategory']
-        });
-
+      agg.map(async (cat) => {
+        const subs = await Products.distinct('subcategory', { category: cat.category, inStock: true } as any);
         return {
-          name: cat.category,
-          count: cat._count.id,
-          subcategories: subcategories
-            .map(sub => sub.subcategory)
-            .filter(Boolean)
+          name: cat.category as string,
+          count: cat.count as number,
+          subcategories: (subs as any[]).filter(Boolean)
         };
       })
     );

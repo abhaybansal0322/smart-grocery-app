@@ -1,4 +1,4 @@
-import { prisma } from './db'
+import { getCollection } from './db'
 
 export interface RecommendationItem {
   productId: string
@@ -8,6 +8,7 @@ export interface RecommendationItem {
   confidence: number
   reason: string
   imageUrl?: string
+  images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>
 }
 
 export interface AIRecommendationParams {
@@ -21,22 +22,11 @@ export interface AIRecommendationParams {
 
 export class AIRecommendationEngine {
   private async getUserPreferences(userId: string) {
-    const preferences = await prisma.userPreference.findMany({
-      where: { userId },
-      orderBy: { preference: 'desc' }
-    })
-
-    const ratings = await prisma.rating.findMany({
-      where: { userId },
-      include: { product: true }
-    })
-
-    const feedback = await prisma.feedback.findMany({
-      where: { userId },
-      include: { order: true }
-    })
-
-    return { preferences, ratings, feedback }
+    const Preferences = await getCollection('UserPreference')
+    const Ratings = await getCollection('Rating')
+    const preferences = await Preferences.find({ userId } as any).sort({ preference: -1 }).toArray()
+    const ratings = await Ratings.find({ userId } as any).toArray()
+    return { preferences, ratings, feedback: [] }
   }
 
   private calculateProductScore(
@@ -93,14 +83,12 @@ export class AIRecommendationEngine {
   }
 
   private async getAvailableProducts(categories: string[], budget: number) {
-    return await prisma.product.findMany({
-      where: {
-        inStock: true,
-        price: { lte: budget },
-        category: { in: categories }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const Products = await getCollection('Product')
+    return await Products.find({
+      inStock: true,
+      price: { $lte: budget },
+      category: { $in: categories }
+    } as any).sort({ createdAt: -1 }).toArray()
   }
 
   public async generateRecommendations(params: AIRecommendationParams): Promise<RecommendationItem[]> {
@@ -110,9 +98,8 @@ export class AIRecommendationEngine {
     const { preferences, ratings } = await this.getUserPreferences(userId)
     
     // Get user profile for additional context
-    const userProfile = await prisma.userProfile.findUnique({
-      where: { userId }
-    })
+    const Profiles = await getCollection('UserProfile')
+    const userProfile = await Profiles.findOne({ userId } as any)
 
     // Determine categories based on preferences and dietary restrictions
     const categories = this.getRelevantCategories(preferences, dietaryRestrictions)
@@ -147,14 +134,15 @@ export class AIRecommendationEngine {
       .slice(0, maxItems)
 
     // Convert to recommendation format
-    const recommendations: RecommendationItem[] = topProducts.map(product => ({
-      productId: product.id,
-      name: product.name,
-      category: product.category,
-      price: product.price,
-      confidence: Math.round(product.score * 100),
-      reason: product.reason,
-      imageUrl: product.imageUrl
+    const recommendations: RecommendationItem[] = topProducts.map((product: any) => ({
+      productId: String(product.id ?? product._id),
+      name: String(product.name),
+      category: String(product.category),
+      price: Number(product.price),
+      confidence: Math.round(Number(product.score) * 100),
+      reason: String(product.reason || ''),
+      imageUrl: (product.images && product.images[0]?.url) || product.imageUrl,
+      images: product.images
     }))
 
     return recommendations
@@ -165,8 +153,12 @@ export class AIRecommendationEngine {
     
     // If user has preferences, prioritize those categories
     if (preferences.length > 0) {
-      const preferredCategories = [...new Set(preferences.map(p => p.category))]
-      return [...preferredCategories, ...baseCategories.filter(c => !preferredCategories.includes(c))]
+      const preferredCategories = preferences.reduce<string[]>((acc, p: any) => {
+        const cat = String(p.category)
+        if (acc.indexOf(cat) === -1) acc.push(cat)
+        return acc
+      }, [])
+      return [...preferredCategories, ...baseCategories.filter(c => preferredCategories.indexOf(c) === -1)]
     }
 
     return baseCategories
@@ -190,67 +182,41 @@ export class AIRecommendationEngine {
     rating: number,
     feedback?: string
   ) {
-    const product = await prisma.product.findUnique({
-      where: { id: productId }
-    })
+    const Products = await getCollection('Product')
+    const product = await Products.findOne({ id: productId } as any)
 
     if (!product) return
 
     // Update or create user preference
-    const existingPreference = await prisma.userPreference.findUnique({
-      where: {
-        userId_category_itemName: {
-          userId,
-          category: product.category,
-          itemName: product.name
-        }
-      }
-    })
+    const Preferences = await getCollection('UserPreference')
+    const existingPreference = await Preferences.findOne({ userId, category: (product as any).category, itemName: (product as any).name } as any)
 
     if (existingPreference) {
       // Update existing preference based on rating
       const newPreference = Math.max(0, Math.min(1, rating / 5))
-      await prisma.userPreference.update({
-        where: { id: existingPreference.id },
-        data: {
-          preference: newPreference,
-          frequency: existingPreference.frequency + 1,
-          lastPurchased: new Date()
-        }
-      })
+      await Preferences.updateOne(
+        { id: existingPreference.id } as any,
+        { $set: { preference: newPreference, frequency: existingPreference.frequency + 1, lastPurchased: new Date() } }
+      )
     } else {
       // Create new preference
-      await prisma.userPreference.create({
-        data: {
-          userId,
-          category: product.category,
-          itemName: product.name,
-          preference: rating / 5,
-          frequency: 1,
-          lastPurchased: new Date()
-        }
-      })
+      await Preferences.insertOne({
+        userId,
+        category: (product as any).category,
+        itemName: (product as any).name,
+        preference: rating / 5,
+        frequency: 1,
+        lastPurchased: new Date()
+      } as any)
     }
 
     // Update or create rating
-    await prisma.rating.upsert({
-      where: {
-        userId_productId: {
-          userId,
-          productId
-        }
-      },
-      update: {
-        rating,
-        review: feedback
-      },
-      create: {
-        userId,
-        productId,
-        rating,
-        review: feedback
-      }
-    })
+    const Ratings = await getCollection('Rating')
+    await Ratings.updateOne(
+      { userId, productId } as any,
+      { $set: { rating, review: feedback } },
+      { upsert: true }
+    )
   }
 }
 

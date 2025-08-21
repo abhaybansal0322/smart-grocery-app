@@ -62,9 +62,8 @@ smart-grocery-app/
 │   ├── auth-context.tsx      # React auth context
 │   ├── ai-recommendations.ts # AI recommendation engine
 │   └── db.ts                 # Database connection
-├── prisma/                   # Database schema and migrations
-│   ├── schema.prisma         # Database schema
-│   └── seed.ts               # Sample data
+├── prisma/                   # Seed script only (Mongo driver)
+│   └── seed.ts               # Seed data using MongoDB driver
 └── hooks/                    # Custom React hooks
 ```
 
@@ -101,8 +100,6 @@ The app includes comprehensive data models for:
 
 3. **Set up the database**
    ```bash
-   npx prisma generate
-   npx prisma db push
    npm run db:seed
    ```
 

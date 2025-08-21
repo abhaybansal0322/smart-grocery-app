@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getCollection } from '@/lib/db'
 import { hashPassword } from '@/lib/auth'
 import { z } from 'zod'
-import { Prisma } from '@prisma/client'
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -28,9 +27,9 @@ export async function POST(request: NextRequest) {
     const validatedData = registerSchema.parse(body)
 
     // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email: validatedData.email }
-    })
+    const users = await getCollection('User')
+    const profiles = await getCollection('UserProfile')
+    const existingUser = await users.findOne({ email: validatedData.email } as any)
 
     if (existingUser) {
       return NextResponse.json(
@@ -42,44 +41,50 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await hashPassword(validatedData.password)
 
-    // Create user and profile in a transaction
-    const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
-      const newUser = await tx.user.create({
-        data: {
-          email: validatedData.email,
-          password: hashedPassword,
-          firstName: validatedData.firstName,
-          lastName: validatedData.lastName,
-          profile: {
-            create: {
-              householdSize: validatedData.householdSize,
-              weeklyBudget: validatedData.weeklyBudget * 100, // Convert to cents
-              dietaryRestrictions: validatedData.dietaryRestrictions,
-              allergies: validatedData.allergies,
-              cookingTime: validatedData.cookingTime,
-              mealTypes: validatedData.mealTypes,
-              shoppingFrequency: validatedData.shoppingFrequency,
-              preferredDeliveryDay: validatedData.preferredDeliveryDay,
-              deliveryMethod: validatedData.deliveryMethod,
-              pickupLocation: validatedData.pickupLocation,
-              sustainabilityImportance: validatedData.sustainabilityImportance
-            }
-          }
-        },
-        include: {
-          profile: true
-        }
-      })
+    // Create user and profile
+    const now = new Date()
+    const insertUserResult = await users.insertOne({
+      email: validatedData.email,
+      password: hashedPassword,
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      createdAt: now,
+      updatedAt: now
+    } as any)
 
-      return newUser
-    })
+    const userId = insertUserResult.insertedId.toString()
 
-    // Remove password from response
-    const { password, ...userWithoutPassword } = user
+    const profileDoc = {
+      userId,
+      householdSize: validatedData.householdSize,
+      weeklyBudget: validatedData.weeklyBudget * 100, // cents
+      dietaryRestrictions: validatedData.dietaryRestrictions,
+      allergies: validatedData.allergies,
+      cookingTime: validatedData.cookingTime,
+      mealTypes: validatedData.mealTypes,
+      shoppingFrequency: validatedData.shoppingFrequency,
+      preferredDeliveryDay: validatedData.preferredDeliveryDay,
+      deliveryMethod: validatedData.deliveryMethod,
+      pickupLocation: validatedData.pickupLocation,
+      sustainabilityImportance: validatedData.sustainabilityImportance,
+      createdAt: now,
+      updatedAt: now
+    }
+    await profiles.insertOne(profileDoc as any)
+
+    const user = {
+      id: userId,
+      email: validatedData.email,
+      firstName: validatedData.firstName,
+      lastName: validatedData.lastName,
+      createdAt: now,
+      updatedAt: now,
+      profile: profileDoc
+    }
 
     return NextResponse.json({
       message: 'User created successfully',
-      user: userWithoutPassword
+      user
     }, { status: 201 })
 
   } catch (error) {

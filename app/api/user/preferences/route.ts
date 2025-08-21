@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,8 +15,38 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // For now, return mock preferences
-    const mockPreferences = {
+    const Profiles = await getCollection('UserProfile');
+    const profile = await Profiles.findOne({ userId: decoded.userId } as any);
+
+    const preferences = profile ? {
+      dietary: {
+        vegetarian: false,
+        vegan: false,
+        glutenFree: false,
+        dairyFree: false,
+        keto: false,
+        paleo: false,
+        lowCarb: false,
+        mediterranean: false
+      },
+      allergies: Array.isArray(profile.allergies) ? profile.allergies : [],
+      budget: {
+        min: Math.round((profile.weeklyBudget ?? 15000) / 100) - 50,
+        max: Math.round((profile.weeklyBudget ?? 15000) / 100) + 50
+      },
+      frequency: 'weekly',
+      householdSize: profile.householdSize ?? 1,
+      sustainability: {
+        localSourcing: 70,
+        organic: 60,
+        packaging: 80
+      },
+      aiLearning: {
+        enabled: true,
+        feedbackFrequency: 'after_each_box',
+        personalizationLevel: 85
+      }
+    } : {
       dietary: {
         vegetarian: false,
         vegan: false,
@@ -28,26 +58,15 @@ export async function GET(request: NextRequest) {
         mediterranean: false
       },
       allergies: [],
-      budget: {
-        min: 50,
-        max: 200
-      },
+      budget: { min: 50, max: 200 },
       frequency: 'weekly',
-      householdSize: 2,
-      sustainability: {
-        localSourcing: 70,
-        organic: 60,
-        packaging: 80
-      },
-      aiLearning: {
-        enabled: true,
-        feedbackFrequency: 'after_each_box',
-        personalizationLevel: 85
-      }
+      householdSize: 1,
+      sustainability: { localSourcing: 70, organic: 60, packaging: 80 },
+      aiLearning: { enabled: true, feedbackFrequency: 'after_each_box', personalizationLevel: 85 }
     };
 
     return NextResponse.json({ 
-      preferences: mockPreferences,
+      preferences,
       message: 'Preferences retrieved successfully' 
     });
 
@@ -75,14 +94,31 @@ export async function PUT(request: NextRequest) {
 
     const body = await request.json();
     const { preferences } = body;
+    const Profiles = await getCollection('UserProfile');
 
-    // For now, just return success since we're using mock data
-    // In a real implementation, you would save to the database
-    console.log('Saving preferences:', preferences);
+    // Persist subset of preferences into UserProfile
+    const weeklyBudgetDollars = preferences?.budget?.max ?? 200;
+    await Profiles.updateOne(
+      { userId: decoded.userId } as any,
+      { $set: {
+          householdSize: preferences?.householdSize ?? 1,
+          weeklyBudget: Math.round(weeklyBudgetDollars * 100),
+          allergies: preferences?.allergies ?? [],
+          dietaryRestrictions: preferences?.dietary ?? {},
+          cookingTime: 30,
+          mealTypes: ['Quick & Easy'],
+          shoppingFrequency: preferences?.frequency ?? 'weekly',
+          preferredDeliveryDay: 'saturday',
+          deliveryMethod: 'delivery',
+          sustainabilityImportance: 7
+        }
+      },
+      { upsert: true }
+    );
 
     return NextResponse.json({ 
       message: 'Preferences saved successfully',
-      preferences 
+      preferences
     });
 
   } catch (error) {

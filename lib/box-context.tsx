@@ -67,8 +67,8 @@ export function BoxProvider({ children }: { children: ReactNode }) {
           status: 'customizing'
         });
       }
-    } catch (error) {
-      if (error.name === 'AbortError') {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
         console.log('Request timed out, using fallback box');
       }
       // Initialize with empty box if fetch fails

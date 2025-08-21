@@ -18,6 +18,7 @@ interface Product {
   isLocal: boolean;
   isSeasonal: boolean;
   imageUrl?: string;
+  images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>;
   brand?: string;
   stockLevel: number;
   calories?: number;

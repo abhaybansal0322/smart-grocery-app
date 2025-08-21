@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getCollection } from '@/lib/db'
 import { verifyToken } from '@/lib/auth'
 import { z } from 'zod'
 
@@ -41,19 +41,22 @@ export async function POST(request: NextRequest) {
     const nextDelivery = calculateNextDelivery(validatedData.frequency)
 
     // Create subscription
-    const subscription = await prisma.subscription.create({
-      data: {
-        userId: payload.userId,
-        name: validatedData.name,
-        type: validatedData.type,
-        frequency: validatedData.frequency,
-        nextDelivery,
-        maxItems: validatedData.maxItems,
-        maxBudget: validatedData.maxBudget,
-        aiEnabled: validatedData.aiEnabled,
-        customizationLevel: validatedData.customizationLevel
-      }
-    })
+    const Subscriptions = await getCollection('Subscription')
+    const doc = {
+      userId: payload.userId,
+      name: validatedData.name,
+      type: validatedData.type,
+      frequency: validatedData.frequency,
+      nextDelivery,
+      maxItems: validatedData.maxItems,
+      maxBudget: validatedData.maxBudget,
+      aiEnabled: validatedData.aiEnabled,
+      customizationLevel: validatedData.customizationLevel,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+    const result = await Subscriptions.insertOne(doc as any)
+    const subscription = { id: String(result.insertedId), ...doc }
 
     return NextResponse.json({
       message: 'Subscription created successfully',
@@ -99,16 +102,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Get user's subscriptions
-    const subscriptions = await prisma.subscription.findMany({
-      where: { userId: payload.userId },
-      include: {
-        orders: {
-          orderBy: { createdAt: 'desc' },
-          take: 5
-        }
-      },
-      orderBy: { createdAt: 'desc' }
-    })
+    const Subscriptions = await getCollection('Subscription')
+    const subscriptions = await Subscriptions.find({ userId: payload.userId } as any)
+      .sort({ createdAt: -1 })
+      .toArray()
 
     return NextResponse.json({ subscriptions })
 

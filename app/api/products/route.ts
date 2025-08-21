@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -60,42 +60,32 @@ export async function GET(request: NextRequest) {
     // Fetch products from database with pagination
     const skip = (page - 1) * limit;
     
-    const [products, totalCount] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { name: 'asc' },
-        select: {
-          id: true,
-          name: true,
-          description: true,
-          category: true,
-          subcategory: true,
-          price: true,
-          unit: true,
-          isOrganic: true,
-          isLocal: true,
-          isSeasonal: true,
-          imageUrl: true,
-          brand: true,
-          stockLevel: true,
-          calories: true,
-          protein: true,
-          carbs: true,
-          fat: true
-        }
-      }),
-      prisma.product.count({ where })
+    const Products = await getCollection('Product');
+    const mongoFilter: any = {};
+    if (where.inStock === true) mongoFilter.inStock = true;
+    if (where.category) mongoFilter.category = where.category;
+    if (where.isOrganic === true) mongoFilter.isOrganic = true;
+    if (where.isLocal === true) mongoFilter.isLocal = true;
+    if (where.price) {
+      mongoFilter.price = {};
+      if (where.price.gte !== undefined) mongoFilter.price.$gte = where.price.gte;
+      if (where.price.lte !== undefined) mongoFilter.price.$lte = where.price.lte;
+    }
+
+    const [list, totalCount] = await Promise.all([
+      Products.find(mongoFilter).sort({ name: 1 }).skip(skip).limit(limit).toArray(),
+      Products.countDocuments(mongoFilter)
     ]);
 
-    console.log(`Products API - Returning ${products.length} products out of ${totalCount} total`);
+    console.log(`Products API - Returning ${list.length} products out of ${totalCount} total`);
 
     // Transform price from cents to dollars for frontend
-    const transformedProducts = products.map((product: any) => ({
+    const transformedProducts = list.map((product: any) => ({
       ...product,
-      price: product.price / 100, // Convert cents to dollars
-      unitPrice: product.price / 100
+      price: product.price / 100,
+      unitPrice: product.price / 100,
+      // Ensure images is an array when not set
+      images: Array.isArray(product.images) ? product.images : []
     }));
     
     return NextResponse.json({ 

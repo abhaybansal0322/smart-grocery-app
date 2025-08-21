@@ -31,7 +31,17 @@ export default function CustomizeBox() {
   const { user, token } = useAuth();
   const { currentBox, updateCurrentBox, addToBox, removeFromBox, isLoading: boxLoading } = useBox();
 
-  const [availableProducts, setAvailableProducts] = useState([]);
+  interface Product {
+    id: string;
+    name: string;
+    price: number; // cents
+    category: string;
+    imageUrl?: string;
+    images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>;
+    organic?: boolean;
+  }
+
+  const [availableProducts, setAvailableProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
@@ -44,8 +54,8 @@ export default function CustomizeBox() {
     if (token) {
       fetchAvailableProducts();
     } else {
-      // Fallback to mock products if no token (for development/testing)
-      setAvailableProducts(getMockProducts());
+      // No mock fallback; keep empty when unauthenticated
+      setAvailableProducts([]);
       setIsLoading(false);
     }
   }, [token]);
@@ -72,44 +82,33 @@ export default function CustomizeBox() {
       if (response.ok) {
         const data = await response.json();
         console.log('Products API data:', data);
-        setAvailableProducts(data.products || getMockProducts());
+        const normalized: Product[] = (data.products || []).map((p: any) => ({
+          id: String(p.id),
+          name: p.name,
+          // API returns dollars; convert to cents for UI/state consistency
+          price: Math.round((p.price ?? 0) * 100),
+          category: p.category,
+          imageUrl: (p.images && p.images[0]?.url) || p.imageUrl,
+          images: p.images,
+          organic: Boolean(p.isOrganic ?? p.organic)
+        }));
+        setAvailableProducts(normalized);
       } else {
         console.error('Products API error:', response.status, response.statusText);
-        setAvailableProducts(getMockProducts());
+        setAvailableProducts([]);
       }
-    } catch (error) {
-      console.error('Failed to fetch products:', error);
-      if (error.name === 'AbortError') {
+    } catch (err) {
+      console.error('Failed to fetch products:', err);
+      if (err instanceof DOMException && err.name === 'AbortError') {
         console.log('Products request timed out, using mock products');
       }
-      setAvailableProducts(getMockProducts());
+      setAvailableProducts([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getMockCurrentBox = () => ({
-    items: [
-      { id: 1, name: 'Organic Bananas', quantity: 2, price: 300, category: 'fruits' },
-      { id: 2, name: 'Fresh Spinach', quantity: 1, price: 450, category: 'vegetables' },
-      { id: 3, name: 'Free-range Eggs', quantity: 1, price: 650, category: 'dairy' },
-      { id: 4, name: 'Whole Grain Bread', quantity: 1, price: 380, category: 'bakery' }
-    ],
-    total: 1780,
-    deliveryDate: '2024-01-20',
-    status: 'customizing'
-  });
-
-  const getMockProducts = () => [
-    { id: 5, name: 'Avocados', price: 450, category: 'fruits', imageUrl: 'https://via.placeholder.com/64x64?text=Avocado', organic: true },
-    { id: 6, name: 'Greek Yogurt', price: 580, category: 'dairy', imageUrl: 'https://via.placeholder.com/64x64?text=Yogurt', organic: false },
-    { id: 7, name: 'Sweet Potatoes', price: 320, category: 'vegetables', imageUrl: 'https://via.placeholder.com/64x64?text=Potato', organic: true },
-    { id: 8, name: 'Almond Milk', price: 420, category: 'dairy', imageUrl: 'https://via.placeholder.com/64x64?text=Milk', organic: true },
-    { id: 9, name: 'Organic Chicken Breast', price: 1200, category: 'meat', imageUrl: 'https://via.placeholder.com/64x64?text=Chicken', organic: true },
-    { id: 10, name: 'Mixed Berries', price: 680, category: 'fruits', imageUrl: 'https://via.placeholder.com/64x64?text=Berries', organic: true },
-    { id: 11, name: 'Quinoa', price: 450, category: 'grains', imageUrl: 'https://via.placeholder.com/64x64?text=Quinoa', organic: false },
-    { id: 12, name: 'Broccoli', price: 380, category: 'vegetables', imageUrl: 'https://via.placeholder.com/64x64?text=Broccoli', organic: true }
-  ];
+  // Removed mock data helpers now that data is fetched from the database
 
 
 
@@ -332,7 +331,7 @@ export default function CustomizeBox() {
                         <div key={product.id} className="border rounded-lg p-4 hover:shadow-md transition-shadow">
                           <div className="flex items-start space-x-3">
                             <img 
-                              src={product.imageUrl} 
+                              src={product.imageUrl || 'https://via.placeholder.com/64x64?text=Product'} 
                               alt={product.name}
                               className="w-16 h-16 rounded-lg object-cover"
                             />

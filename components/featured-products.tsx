@@ -89,7 +89,7 @@ export default function FeaturedProducts({
               <CardHeader className="pb-2">
                 <div className="relative">
                   <img
-                    src={product.imageUrl || 'https://via.placeholder.com/300x200?text=Product'}
+                    src={(product.images && product.images[0]?.url) || product.imageUrl || 'https://via.placeholder.com/300x200?text=Product'}
                     alt={product.name}
                     className="w-full h-48 object-cover rounded-lg group-hover:scale-105 transition-transform duration-300"
                   />

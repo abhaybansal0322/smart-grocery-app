@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET() {
   try {
     console.log('Testing MongoDB connection...');
     
     // Test basic connection by trying to count products
-    const productCount = await prisma.product.count();
+    const Products = await getCollection('Product');
+    const productCount = await Products.countDocuments({} as any);
     
     console.log('MongoDB connection successful!');
     

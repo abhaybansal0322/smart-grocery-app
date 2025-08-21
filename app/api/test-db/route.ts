@@ -1,24 +1,23 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
+import { getCollection } from '@/lib/db'
 
 export async function GET() {
   try {
     // Test database connection
-    const userCount = await prisma.user.count()
-    const productCount = await prisma.product.count()
+    const Users = await getCollection('User')
+    const Products = await getCollection('Product')
+    const userCount = await Users.countDocuments({} as any)
+    const productCount = await Products.countDocuments({} as any)
     
     // Check if test user exists
-    const testUser = await prisma.user.findUnique({
-      where: { email: 'test@smartgrocer.com' },
-      select: { id: true, firstName: true, lastName: true, email: true }
-    })
+    const testUser = await Users.findOne({ email: 'test@smartgrocer.com' } as any, { projection: { _id: 1, firstName: 1, lastName: 1, email: 1 } } as any)
 
     return NextResponse.json({
       message: 'Database connection successful',
       userCount,
       productCount,
       testUser: testUser ? {
-        id: testUser.id,
+        id: String(testUser._id),
         name: `${testUser.firstName} ${testUser.lastName}`,
         email: testUser.email
       } : null

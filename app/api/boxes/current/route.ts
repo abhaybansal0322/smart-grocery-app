@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,69 +17,32 @@ export async function GET(request: NextRequest) {
     }
 
     // Get or create the user's current box from database
-    let userBox = await prisma.box.findUnique({
-      where: { userId: decoded.userId }
-    });
+    const Boxes = await getCollection('Box');
+    let userBox = await Boxes.findOne({ userId: decoded.userId } as any);
 
     if (!userBox) {
-      // Create a new box for the user with seeded items
-      const defaultItems = [
-        {
-          id: 1,
-          name: 'Organic Bananas',
-          quantity: 2,
-          price: 300,
-          category: 'fruits',
-          imageUrl: 'https://via.placeholder.com/64x64?text=Banana',
-          organic: true
-        },
-        {
-          id: 2,
-          name: 'Fresh Spinach',
-          quantity: 1,
-          price: 450,
-          category: 'vegetables',
-          imageUrl: 'https://via.placeholder.com/64x64?text=Spinach',
-          organic: true
-        },
-        {
-          id: 3,
-          name: 'Free-range Eggs',
-          quantity: 1,
-          price: 650,
-          category: 'dairy',
-          imageUrl: 'https://via.placeholder.com/64x64?text=Eggs',
-          organic: false
-        },
-        {
-          id: 4,
-          name: 'Whole Grain Bread',
-          quantity: 1,
-          price: 380,
-          category: 'bakery',
-          imageUrl: 'https://via.placeholder.com/64x64?text=Bread',
-          organic: false
-        }
-      ];
-
-      userBox = await prisma.box.create({
-        data: {
-          userId: decoded.userId,
-          items: defaultItems,
-          total: 1780,
-          deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
-          status: 'customizing',
-          aiGenerated: true
-        }
-      });
+      // Create a new empty box for the user
+      const doc = {
+        userId: decoded.userId,
+        items: [],
+        total: 0,
+        deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        status: 'customizing',
+        aiGenerated: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any
+      await Boxes.insertOne(doc)
+      userBox = doc
     }
 
     // Convert the database box to the expected format
+    const boxDoc: any = userBox as any
     const boxResponse = {
-      items: userBox.items as any[],
-      total: userBox.total,
-      deliveryDate: userBox.deliveryDate.toISOString().split('T')[0],
-      status: userBox.status
+      items: (boxDoc?.items ?? []) as any[],
+      total: boxDoc?.total ?? 0,
+      deliveryDate: new Date(boxDoc?.deliveryDate).toISOString().split('T')[0],
+      status: boxDoc?.status ?? 'customizing'
     };
 
     return NextResponse.json({ 
@@ -113,34 +76,32 @@ export async function PUT(request: NextRequest) {
     const { box } = body;
 
     // Update or create the user's box in the database
-    const updatedBox = await prisma.box.upsert({
-      where: { userId: decoded.userId },
-      update: {
-        items: box.items,
-        total: box.total,
-        deliveryDate: new Date(box.deliveryDate),
-        status: box.status,
-        lastModified: new Date()
+    const Boxes = await getCollection('Box');
+    await Boxes.updateOne(
+      { userId: decoded.userId } as any,
+      { $set: {
+          items: box.items,
+          total: box.total,
+          deliveryDate: new Date(box.deliveryDate),
+          status: box.status,
+          lastModified: new Date(),
+          aiGenerated: true
+        }
       },
-      create: {
-        userId: decoded.userId,
-        items: box.items,
-        total: box.total,
-        deliveryDate: new Date(box.deliveryDate),
-        status: box.status,
-        aiGenerated: true
-      }
-    });
+      { upsert: true }
+    );
+    const updatedBox = await Boxes.findOne({ userId: decoded.userId } as any)
+    const updatedBoxDoc: any = updatedBox as any
 
     console.log('Saving box to database for user:', decoded.userId);
 
     return NextResponse.json({ 
       message: 'Box saved successfully',
       box: {
-        items: updatedBox.items,
-        total: updatedBox.total,
-        deliveryDate: updatedBox.deliveryDate.toISOString().split('T')[0],
-        status: updatedBox.status
+        items: (updatedBoxDoc?.items ?? []),
+        total: updatedBoxDoc?.total ?? 0,
+        deliveryDate: new Date(updatedBoxDoc?.deliveryDate).toISOString().split('T')[0],
+        status: updatedBoxDoc?.status ?? 'customizing'
       }
     });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,41 +31,20 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch featured products (organic, local, or seasonal items first)
-    const featuredProducts = await prisma.product.findMany({
-      where,
-      take: limit,
-      orderBy: [
-        { isOrganic: 'desc' },
-        { isLocal: 'desc' },
-        { isSeasonal: 'desc' },
-        { stockLevel: 'desc' }
-      ],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        category: true,
-        subcategory: true,
-        price: true,
-        unit: true,
-        isOrganic: true,
-        isLocal: true,
-        isSeasonal: true,
-        imageUrl: true,
-        brand: true,
-        stockLevel: true,
-        calories: true,
-        protein: true,
-        carbs: true,
-        fat: true
-      }
-    });
+    const Products = await getCollection('Product');
+    const mongoFilter: any = { inStock: true };
+    if (where.category) mongoFilter.category = where.category;
+    const featuredProducts = await Products.find(mongoFilter)
+      .sort({ isOrganic: -1, isLocal: -1, isSeasonal: -1, stockLevel: -1 })
+      .limit(limit)
+      .toArray();
 
     // Transform price from cents to dollars
     const transformedProducts = featuredProducts.map((product: any) => ({
       ...product,
       price: product.price / 100,
-      unitPrice: product.price / 100
+      unitPrice: product.price / 100,
+      images: Array.isArray(product.images) ? product.images : []
     }));
 
     console.log(`Featured Products API - Returning ${transformedProducts.length} products`);

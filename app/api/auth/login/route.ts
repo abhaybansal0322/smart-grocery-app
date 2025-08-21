@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/db'
-import { authenticateUser, generateToken } from '@/lib/auth'
 import { z } from 'zod'
+import { getCollection } from '@/lib/db'
+import { generateToken, verifyPassword } from '@/lib/auth'
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -13,10 +13,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validatedData = loginSchema.parse(body)
 
-    // Authenticate user
-    const user = await authenticateUser(validatedData.email, validatedData.password)
+    const Users = await getCollection('User')
+    const email = validatedData.email.trim().toLowerCase()
+    const userDoc = await Users.findOne<any>({ email } as any)
 
-    if (!user) {
+    if (!userDoc) {
+      return NextResponse.json(
+        { error: 'Invalid credentials' },
+        { status: 401 }
+      )
+    }
+
+    const isValid = await verifyPassword(validatedData.password, userDoc.password)
+    if (!isValid) {
       return NextResponse.json(
         { error: 'Invalid credentials' },
         { status: 401 }
@@ -25,12 +34,12 @@ export async function POST(request: NextRequest) {
 
     // Generate JWT token
     const token = generateToken({
-      userId: user.id,
-      email: user.email
+      userId: String(userDoc._id),
+      email: userDoc.email
     })
 
     // Remove password from response
-    const { password, ...userWithoutPassword } = user
+    const { password, ...userWithoutPassword } = { ...userDoc, id: String(userDoc._id) }
 
     return NextResponse.json({
       message: 'Login successful',

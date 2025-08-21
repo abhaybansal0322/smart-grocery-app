@@ -24,7 +24,18 @@ import Link from 'next/link';
 
 export default function MyBoxes() {
   const { user, token } = useAuth();
-  const [orders, setOrders] = useState([]);
+  interface OrderItemSummary { name: string; quantity: number; price: number }
+  interface OrderSummary {
+    id: string;
+    date: string;
+    status: string;
+    items: number;
+    total: number;
+    rating: number;
+    itemsList: OrderItemSummary[];
+  }
+
+  const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -43,7 +54,22 @@ export default function MyBoxes() {
       
       if (response.ok) {
         const data = await response.json();
-        setOrders(data.orders || []);
+        const fetched: OrderSummary[] = (data.orders || []).map((o: any) => ({
+          id: String(o.id),
+          date: String(o.date),
+          status: String(o.status ?? 'processing'),
+          items: Number(o.items ?? 0),
+          total: Number(o.total ?? 0),
+          rating: Number(o.rating ?? 0),
+          itemsList: Array.isArray(o.itemsList)
+            ? o.itemsList.map((it: any) => ({
+                name: String(it.name),
+                quantity: Number(it.quantity ?? 0),
+                price: Number(it.price ?? 0)
+              }))
+            : []
+        }))
+        setOrders(fetched);
       }
     } catch (error) {
       console.error('Failed to fetch orders:', error);
@@ -52,55 +78,9 @@ export default function MyBoxes() {
     }
   };
 
-  // Mock data for demonstration
-  const mockOrders = [
-    {
-      id: 1,
-      date: '2024-01-15',
-      status: 'delivered',
-      items: 24,
-      total: 14200,
-      rating: 5,
-      itemsList: [
-        { name: 'Organic Bananas', quantity: 2, price: 300 },
-        { name: 'Fresh Spinach', quantity: 1, price: 450 },
-        { name: 'Free-range Eggs', quantity: 1, price: 650 },
-        { name: 'Whole Grain Bread', quantity: 1, price: 380 }
-      ]
-    },
-    {
-      id: 2,
-      date: '2024-01-08',
-      status: 'delivered',
-      items: 22,
-      total: 13800,
-      rating: 4,
-      itemsList: [
-        { name: 'Avocados', quantity: 3, price: 450 },
-        { name: 'Greek Yogurt', quantity: 2, price: 580 },
-        { name: 'Sweet Potatoes', quantity: 2, price: 320 },
-        { name: 'Almond Milk', quantity: 1, price: 420 }
-      ]
-    },
-    {
-      id: 3,
-      date: '2024-01-01',
-      status: 'delivered',
-      items: 25,
-      total: 15600,
-      rating: 5,
-      itemsList: [
-        { name: 'Organic Chicken Breast', quantity: 1, price: 1200 },
-        { name: 'Mixed Berries', quantity: 1, price: 680 },
-        { name: 'Quinoa', quantity: 1, price: 450 },
-        { name: 'Broccoli', quantity: 2, price: 380 }
-      ]
-    }
-  ];
+  const displayOrders = orders;
 
-  const displayOrders = orders.length > 0 ? orders : mockOrders;
-
-  const getStatusColor = (status) => {
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'delivered': return 'bg-green-100 text-green-800';
       case 'shipped': return 'bg-blue-100 text-blue-800';

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
-import { prisma } from '@/lib/db';
+import { getCollection } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
@@ -22,26 +22,16 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
 
     // Get user profile and preferences
-    const userProfile = await prisma.userProfile.findUnique({
-      where: { userId },
-      select: {
-        dietaryRestrictions: true,
-        allergies: true,
-        sustainabilityImportance: true,
-        weeklyBudget: true
-      }
-    });
+    const Profiles = await getCollection('UserProfile');
+    const userProfile = await Profiles.findOne({ userId } as any, { projection: { dietaryRestrictions: 1, allergies: 1, sustainabilityImportance: 1, weeklyBudget: 1 } } as any);
 
     if (!userProfile) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
     // Get user preferences
-    const userPreferences = await prisma.userPreference.findMany({
-      where: { userId },
-      orderBy: { preference: 'desc' },
-      take: 20
-    });
+    const Preferences = await getCollection('UserPreference');
+    const userPreferences = await Preferences.find({ userId } as any).sort({ preference: -1 }).limit(20).toArray();
 
     // Build recommendation query
     const where: any = {
@@ -66,36 +56,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get recommended products based on preferences and sustainability
-    const recommendedProducts = await prisma.product.findMany({
-      where,
-      take: limit,
-      orderBy: [
-        { isOrganic: 'desc' },
-        { isLocal: 'desc' },
-        { isSeasonal: 'desc' },
-        { stockLevel: 'desc' }
-      ],
-      select: {
-        id: true,
-        name: true,
-        description: true,
-        category: true,
-        subcategory: true,
-        price: true,
-        unit: true,
-        isOrganic: true,
-        isLocal: true,
-        isSeasonal: true,
-        imageUrl: true,
-        brand: true,
-        stockLevel: true,
-        calories: true,
-        protein: true,
-        carbs: true,
-        fat: true,
-        carbonFootprint: true
-      }
-    });
+    const Products = await getCollection('Product');
+    const mongoFilter: any = { inStock: true };
+    if (where.category) mongoFilter.category = where.category;
+    const recommendedProducts = await Products.find(mongoFilter)
+      .sort({ isOrganic: -1, isLocal: -1, isSeasonal: -1, stockLevel: -1 })
+      .limit(limit)
+      .toArray();
 
     // Transform and score products
     const scoredProducts = recommendedProducts.map((product: any) => {
@@ -130,7 +97,8 @@ export async function GET(request: NextRequest) {
         price: priceInDollars,
         unitPrice: priceInDollars,
         recommendationScore: score,
-        carbonFootprint: product.carbonFootprint || 0
+        carbonFootprint: product.carbonFootprint || 0,
+        images: Array.isArray((product as any).images) ? (product as any).images : []
       };
     });
 

@@ -194,7 +194,7 @@ export default function SustainabilityStats() {
               <Card key={product.id} className="text-center hover:shadow-lg transition-shadow cursor-pointer">
                 <CardHeader className="pb-2">
                   <img
-                    src={product.imageUrl || 'https://via.placeholder.com/100x100?text=Product'}
+                    src={(product as any).images?.[0]?.url || product.imageUrl || 'https://via.placeholder.com/100x100?text=Product'}
                     alt={product.name}
                     className="w-20 h-20 object-cover rounded-lg mx-auto mb-2"
                   />
