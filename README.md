@@ -99,6 +99,12 @@ The app includes comprehensive data models for:
    ```
 
 3. **Set up the database**
+   
+   **First, set up MongoDB:**
+   - Create a `.env` file in the project root (see SETUP.md for detailed instructions)
+   - Add your MongoDB connection string to the `.env` file
+   
+   **Then seed the database:**
    ```bash
    npm run db:seed
    ```

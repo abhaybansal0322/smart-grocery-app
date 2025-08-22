@@ -9,9 +9,9 @@ type GlobalWithMongo = typeof globalThis & {
 const globalWithMongo = globalThis as GlobalWithMongo
 
 function getMongoUri(): string {
-  const uri = process.env.DATABASE_URL || process.env.MONGODB_URI
+  const uri = process.env.DATABASE_URL
   if (!uri) {
-    throw new Error('DATABASE_URL or MONGODB_URI must be set')
+    throw new Error('DATABASE_URL must be set')
   }
   return uri
 }
@@ -21,9 +21,9 @@ function getDatabaseNameFromUri(uri: string): string | undefined {
     const url = new URL(uri)
     // mongodb+srv URIs may not have pathname set to db name if omitted
     const pathname = url.pathname?.replace(/^\//, '')
-    return pathname || process.env.MONGODB_DB || process.env.DATABASE_NAME || undefined
+    return pathname || process.env.DATABASE_NAME || undefined
   } catch {
-    return process.env.MONGODB_DB || process.env.DATABASE_NAME
+    return process.env.DATABASE_NAME
   }
 }
 

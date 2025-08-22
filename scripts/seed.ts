@@ -8,10 +8,17 @@ const envPath = path.resolve(__dirname, "..", ".env");
 
 console.log("Loading from:", envPath);
 
+// Check if .env file exists
+import fs from 'fs';
+if (!fs.existsSync(envPath)) {
+  console.error('❌ .env file not found at:', envPath);
+  console.error('Please create a .env file in the project root with your DATABASE_URL');
+  process.exit(1);
+}
+
 dotenv.config({ path: envPath });
 
 console.log("DATABASE_URL =", process.env.DATABASE_URL);
-console.log("MONGODB_URI  =", process.env.MONGODB_URI);
 
 
 function getCliArgUri(): string | undefined {
@@ -21,17 +28,43 @@ function getCliArgUri(): string | undefined {
     const key = rawKey.replace(/^--/, '')
     const value = rest.join('=')
     if (!value) continue
-    if (key === 'uri' || key === 'database-url' || key === 'mongodb-uri') return value
+    if (key === 'uri' || key === 'database-url') return value
   }
   return undefined
 }
 
 async function getDb() {
-  const uri = getCliArgUri() || process.env.DATABASE_URL || process.env.MONGODB_URI
-  if (!uri) throw new Error('DATABASE_URL or MONGODB_URI must be set')
+  const uri = getCliArgUri() || process.env.DATABASE_URL
+  
+  if (!uri) {
+    console.error('❌ DATABASE_URL must be set');
+    console.error('');
+    console.error('🔧 To fix this, you need to:');
+    console.error('');
+    console.error('1. Create a .env file in the project root with:');
+    console.error('   DATABASE_URL=mongodb+srv://username:password@cluster.mongodb.net/smart_grocery');
+    console.error('');
+    console.error('2. Or use MongoDB Atlas (free):');
+    console.error('   - Go to https://cloud.mongodb.com');
+    console.error('   - Create a free cluster');
+    console.error('   - Get your connection string');
+    console.error('   - Add it to .env file');
+    console.error('');
+    console.error('3. Or run with connection string:');
+    console.error('   npm run db:seed -- --uri="your-mongodb-connection-string"');
+    console.error('');
+    console.error('📝 Example .env file content:');
+    console.error('   DATABASE_URL=mongodb+srv://yourusername:yourpassword@cluster0.xxxxx.mongodb.net/smart_grocery');
+    console.error('   JWT_SECRET=your-secret-key');
+    console.error('');
+    throw new Error('DATABASE_URL must be set')
+  }
+  
+  console.log('🔗 Connecting to MongoDB...');
   const client = new MongoClient(uri)
   await client.connect()
   const dbName = (() => { try { const u = new URL(uri); const p = u.pathname?.replace(/^\//,''); return p || 'smart_grocery' } catch { return 'smart_grocery' } })()
+  console.log('✅ Connected to database:', dbName);
   return { db: client.db(dbName), client }
 }
 
@@ -58,15 +91,18 @@ const products = [
 
 async function main() {
   console.log('🌱 Starting database seed...')
-  const { db, client } = await getDb()
-  const Users = db.collection('User')
-  const Products = db.collection('Product')
-  const Profiles = db.collection('UserProfile')
-  const Subscriptions = db.collection('Subscription')
+  
+  try {
+    const { db, client } = await getDb()
+    const Users = db.collection('User')
+    const Products = db.collection('Product')
+    const Profiles = db.collection('UserProfile')
+    const Subscriptions = db.collection('Subscription')
 
-  await Users.deleteMany({})
-  await Products.deleteMany({})
-  console.log('🗑️  Cleared existing data')
+    console.log('🗑️  Clearing existing data...')
+    await Users.deleteMany({})
+    await Products.deleteMany({})
+    console.log('✅ Cleared existing data')
 
   for (const product of products) {
     await Products.insertOne({ ...product, createdAt: new Date(), updatedAt: new Date(), inStock: true, stockLevel: 100 })
@@ -114,13 +150,17 @@ async function main() {
     updatedAt: now
   })
 
-  console.log('✅ Created test user account:')
-  console.log('   Email: test@smartgrocer.com')
-  console.log('   Password: test123')
-  console.log('   Subscription: Full Box (weekly)')
+    console.log('✅ Created test user account:')
+    console.log('   Email: test@smartgrocer.com')
+    console.log('   Password: test123')
+    console.log('   Subscription: Full Box (weekly)')
 
-  console.log('🎉 Database seeding completed!')
-  await client.close()
+    console.log('🎉 Database seeding completed!')
+    await client.close()
+  } catch (error) {
+    console.error('❌ Database seeding failed:', error)
+    throw error
+  }
 }
 
 main()
