@@ -84,11 +84,14 @@ export default function Dashboard() {
       
       if (response.ok) {
         const data = await response.json();
-        setRecommendations(data.recommendations);
+        setRecommendations(data.recommendations || []);
         setSubscription(data.subscription);
+      } else {
+        setRecommendations([]);
       }
     } catch (error) {
       console.error('Failed to fetch recommendations:', error);
+      setRecommendations([]);
     } finally {
       setIsLoading(false);
     }
@@ -315,7 +318,7 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {recommendations.length > 0 ? (
+                  {recommendations && recommendations.length > 0 ? (
                     recommendations.map((rec, index) => (
                       <div key={index} className="flex items-center space-x-4 p-4 border rounded-lg hover:bg-gray-50 transition-colors">
                         <img 
