@@ -25,11 +25,12 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const validatedData = registerSchema.parse(body)
+    const normalizedEmail = validatedData.email.trim().toLowerCase()
 
     // Check if user already exists
     const users = await getCollection('User')
     const profiles = await getCollection('UserProfile')
-    const existingUser = await users.findOne({ email: validatedData.email } as any)
+    const existingUser = await users.findOne({ email: normalizedEmail } as any)
 
     if (existingUser) {
       return NextResponse.json(
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
     // Create user and profile
     const now = new Date()
     const insertUserResult = await users.insertOne({
-      email: validatedData.email,
+      email: normalizedEmail,
       password: hashedPassword,
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
 
     const user = {
       id: userId,
-      email: validatedData.email,
+      email: normalizedEmail,
       firstName: validatedData.firstName,
       lastName: validatedData.lastName,
       createdAt: now,
