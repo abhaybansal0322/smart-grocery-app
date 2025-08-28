@@ -9,8 +9,8 @@
     "lint": "next lint",
     "db:generate": "echo No-op (Prisma removed)",
     "db:push": "echo No-op (Prisma removed)",
-    "db:seed": "tsx scripts/seed.ts",
-    "db:update-images": "tsx scripts/update-images.ts"
+    "db:seed": "echo Local-only: seed script removed",
+    "db:update-images": "echo Local-only: update-images script removed"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
