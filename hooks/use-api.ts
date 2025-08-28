@@ -99,7 +99,8 @@ const API_BASE = '/api';
 // Helper function to get auth token
 const getAuthToken = (): string | null => {
   if (typeof window !== 'undefined') {
-    return localStorage.getItem('token');
+    // Use the same key as auth-context
+    return localStorage.getItem('authToken');
   }
   return null;
 };

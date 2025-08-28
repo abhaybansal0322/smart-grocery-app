@@ -28,13 +28,11 @@ export async function GET(request: NextRequest) {
     const Profiles = await getCollection('UserProfile')
     const Subscriptions = await getCollection('Subscription')
 
-    // userId is a string; user documents are stored with _id:ObjectId. Try lookup by string id field fallback.
-    const userDoc = await Users.findOne<any>({ $or: [
-      { _id: (payload as any).userId } as any,
-      { _id: ((global as any).ObjectId?.((payload as any).userId)) } as any
-    ] } as any)
-    const profile = await Profiles.findOne<any>({ userId: (payload as any).userId } as any)
-    const subscription = await Subscriptions.findOne<any>({ userId: (payload as any).userId, status: 'active' } as any)
+    // Find by stored string id reference in related docs
+    const userDoc = await Users.findOne<any>({ email: (payload as any).email } as any)
+    const userId = userDoc ? String((userDoc as any)._id) : (payload as any).userId
+    const profile = await Profiles.findOne<any>({ userId } as any)
+    const subscription = await Subscriptions.findOne<any>({ userId, status: 'active' } as any)
 
     const user = userDoc && {
       ...userDoc,
