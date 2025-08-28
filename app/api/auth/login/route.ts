@@ -38,8 +38,9 @@ export async function POST(request: NextRequest) {
       email: userDoc.email
     })
 
-    // Remove password from response
-    const { password, ...userWithoutPassword } = { ...userDoc, id: String(userDoc._id) }
+    // Remove password from response safely without destructuring
+    const userWithoutPassword: any = { ...userDoc, id: String(userDoc._id) }
+    delete userWithoutPassword.password
 
     return NextResponse.json({
       message: 'Login successful',

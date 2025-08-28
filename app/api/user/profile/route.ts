@@ -28,7 +28,11 @@ export async function GET(request: NextRequest) {
     const Profiles = await getCollection('UserProfile')
     const Subscriptions = await getCollection('Subscription')
 
-    const userDoc = await Users.findOne<any>({ _id: (payload as any).userId } as any)
+    // userId is a string; user documents are stored with _id:ObjectId. Try lookup by string id field fallback.
+    const userDoc = await Users.findOne<any>({ $or: [
+      { _id: (payload as any).userId } as any,
+      { _id: ((global as any).ObjectId?.((payload as any).userId)) } as any
+    ] } as any)
     const profile = await Profiles.findOne<any>({ userId: (payload as any).userId } as any)
     const subscription = await Subscriptions.findOne<any>({ userId: (payload as any).userId, status: 'active' } as any)
 
@@ -45,8 +49,9 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Remove password from response
-    const { password, ...userWithoutPassword } = user as any
+    // Remove password from response safely
+    const userWithoutPassword: any = { ...(user as any) }
+    delete userWithoutPassword.password
 
     return NextResponse.json({
       user: userWithoutPassword
