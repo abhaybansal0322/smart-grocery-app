@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { useAuth } from './auth-context';
 
 interface BoxItem {
-  id: number;
+  id: string;
   name: string;
   quantity: number;
   price: number;
@@ -24,7 +24,7 @@ interface BoxContextType {
   currentBox: CurrentBox | null;
   updateCurrentBox: (box: CurrentBox) => void;
   addToBox: (product: any) => void;
-  removeFromBox: (productId: number) => void;
+  removeFromBox: (productId: string) => void;
   refreshBox: () => void;
   isLoading: boolean;
 }
@@ -117,13 +117,13 @@ export function BoxProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    const existingItem = currentBox.items.find(item => item.id === product.id);
+    const existingItem = currentBox.items.find(item => item.id === String(product.id));
     
     if (existingItem) {
       const updatedBox = {
         ...currentBox,
         items: currentBox.items.map(item => 
-          item.id === product.id 
+          item.id === String(product.id) 
             ? { ...item, quantity: item.quantity + 1 }
             : item
         ),
@@ -133,14 +133,14 @@ export function BoxProvider({ children }: { children: ReactNode }) {
     } else {
       const updatedBox = {
         ...currentBox,
-        items: [...currentBox.items, { ...product, quantity: 1 }],
+        items: [...currentBox.items, { ...product, id: String(product.id), quantity: 1 }],
         total: currentBox.total + product.price
       };
       updateCurrentBox(updatedBox);
     }
   }, [currentBox, updateCurrentBox]);
 
-  const removeFromBox = useCallback((productId: number) => {
+  const removeFromBox = useCallback((productId: string) => {
     if (!currentBox) return;
     
     const item = currentBox.items.find(item => item.id === productId);

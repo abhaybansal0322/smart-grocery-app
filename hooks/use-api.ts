@@ -132,6 +132,17 @@ const apiCall = async <T>(
   return response.json();
 };
 
+// Helper for public GET calls (no auth required)
+const publicGet = async <T>(endpoint: string, params?: URLSearchParams): Promise<T> => {
+  const url = params && params.toString() ? `${API_BASE}${endpoint}?${params.toString()}` : `${API_BASE}${endpoint}`;
+  const response = await fetch(url, { headers: { 'Content-Type': 'application/json' } });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+  }
+  return response.json();
+};
+
 // Custom hooks for different API endpoints
 export const useProducts = (filters?: {
   category?: string;
@@ -191,7 +202,16 @@ export const useFeaturedProducts = (category?: string, limit?: number): ApiRespo
         if (category) params.append('category', category);
         if (limit) params.append('limit', limit.toString());
 
-        const response = await apiCall<{ products: Product[]; message: string }>(`/products/featured?${params.toString()}`);
+        // Try public first, if it fails due to auth, fall back to authed call
+        let response: { products: Product[]; message: string };
+        try {
+          response = await publicGet<{ products: Product[]; message: string }>(`/products/featured`, params);
+        } catch (e) {
+          // If user is logged in, try authed; else rethrow
+          const token = getAuthToken();
+          if (!token) throw e;
+          response = await apiCall<{ products: Product[]; message: string }>(`/products/featured?${params.toString()}`);
+        }
         setData(response);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch featured products');
@@ -242,8 +262,15 @@ export const useSustainability = (): ApiResponse<SustainabilityResponse> => {
       try {
         setLoading(true);
         setError(null);
-        
-        const response = await apiCall<SustainabilityResponse>('/sustainability');
+        // Try public endpoint first
+        let response: SustainabilityResponse;
+        try {
+          response = await publicGet<SustainabilityResponse>('/sustainability');
+        } catch (e) {
+          const token = getAuthToken();
+          if (!token) throw e;
+          response = await apiCall<SustainabilityResponse>('/sustainability');
+        }
         setData(response);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch sustainability data');
@@ -307,7 +334,7 @@ export const fetchFeaturedProducts = (category?: string, limit?: number): Promis
   if (category) params.append('category', category);
   if (limit) params.append('limit', limit.toString());
 
-  return apiCall<{ products: Product[]; message: string }>(`/products/featured?${params.toString()}`);
+  return publicGet<{ products: Product[]; message: string }>(`/products/featured`, params);
 };
 
 export const fetchCategories = (): Promise<CategoriesResponse> => {
@@ -315,7 +342,7 @@ export const fetchCategories = (): Promise<CategoriesResponse> => {
 };
 
 export const fetchSustainability = (): Promise<SustainabilityResponse> => {
-  return apiCall<SustainabilityResponse>('/sustainability');
+  return publicGet<SustainabilityResponse>('/sustainability');
 };
 
 export const fetchRecommendations = (category?: string, limit?: number): Promise<RecommendationsResponse> => {

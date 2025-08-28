@@ -6,14 +6,12 @@ export async function GET(request: NextRequest) {
   try {
     console.log('Featured Products API called');
     const token = request.headers.get('authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return NextResponse.json({ error: 'No token provided' }, { status: 401 });
-    }
-
-    const decoded = verifyToken(token);
-    if (!decoded) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    // Allow public access for landing usage; if token present, verify
+    if (token) {
+      const decoded = verifyToken(token);
+      if (!decoded) {
+        return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+      }
     }
 
     // Get query parameters

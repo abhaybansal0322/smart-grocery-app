@@ -83,7 +83,7 @@ export default function CustomizeBox() {
         const data = await response.json();
         console.log('Products API data:', data);
         const normalized: Product[] = (data.products || []).map((p: any) => ({
-          id: String(p.id),
+          id: String(p.id ?? p._id),
           name: p.name,
           // API returns dollars; convert to cents for UI/state consistency
           price: Math.round((p.price ?? 0) * 100),

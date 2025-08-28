@@ -34,38 +34,32 @@ export default function Onboarding() {
     {
       title: 'Account Setup',
       description: 'Create your account',
-      icon: Users,
-      component: AccountStep
+      icon: Users
     },
     {
       title: 'Household Information',
       description: 'Tell us about your household',
-      icon: Users,
-      component: HouseholdStep
+      icon: Users
     },
     {
       title: 'Budget & Preferences',
       description: 'Set your budget and shopping preferences',
-      icon: DollarSign,
-      component: BudgetStep
+      icon: DollarSign
     },
     {
       title: 'Dietary Requirements',
       description: 'Let us know about dietary restrictions and allergies',
-      icon: Heart,
-      component: DietaryStep
+      icon: Heart
     },
     {
       title: 'Cooking Habits',
       description: 'How do you like to cook and eat?',
-      icon: Utensils,
-      component: CookingStep
+      icon: Utensils
     },
     {
       title: 'Schedule & Sustainability',
       description: 'Final preferences for delivery and sustainability',
-      icon: Clock,
-      component: ScheduleStep
+      icon: Clock
     }
   ];
 
@@ -486,8 +480,24 @@ export default function Onboarding() {
     );
   }
 
-  // Only assign CurrentStepComponent if currentStep < steps.length
-  const CurrentStepComponent = steps[currentStep].component;
+  function renderCurrentStep() {
+    switch (currentStep) {
+      case 0:
+        return AccountStep();
+      case 1:
+        return HouseholdStep();
+      case 2:
+        return BudgetStep();
+      case 3:
+        return DietaryStep();
+      case 4:
+        return CookingStep();
+      case 5:
+        return ScheduleStep();
+      default:
+        return null;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-blue-50 to-emerald-50">
@@ -542,7 +552,7 @@ export default function Onboarding() {
             <CardDescription className="text-base">{steps[currentStep].description}</CardDescription>
           </CardHeader>
           <CardContent>
-            <CurrentStepComponent />
+            {renderCurrentStep()}
           </CardContent>
         </Card>
 
