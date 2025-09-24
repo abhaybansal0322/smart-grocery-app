@@ -1,11 +1,16 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import './globals.css';
 import { AuthProvider } from '@/lib/auth-context';
 import { BoxProvider } from '@/lib/box-context';
+import type { ReactNode } from 'react';
+import type { AppProps } from 'next/app';
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  fallback: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'Arial', 'sans-serif'],
+});
 
 export const metadata: Metadata = {
   title: 'SmartGrocer - AI-Driven Grocery Subscription',
@@ -20,11 +25,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={inter.className}>
-        <AuthProvider>
-          <BoxProvider>
-            {children}
-          </BoxProvider>
-        </AuthProvider>
+        <AuthProvider children={
+          <BoxProvider children={children} />
+        } />
       </body>
     </html>
   );

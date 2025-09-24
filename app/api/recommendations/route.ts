@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 import { getCollection } from '@/lib/db';
+import { AIRecommendationEngine } from '@/lib/ai-recommendations';
+
+const aiRecommendationEngine = new AIRecommendationEngine();
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -55,60 +61,35 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Get recommended products based on preferences and sustainability
-    const Products = await getCollection('Product');
-    const mongoFilter: any = { inStock: true };
-    if (where.category) mongoFilter.category = where.category;
-    const recommendedProducts = await Products.find(mongoFilter)
-      .sort({ isOrganic: -1, isLocal: -1, isSeasonal: -1, stockLevel: -1 })
-      .limit(limit)
-      .toArray();
+    // Get AI-powered recommendations
+    const recommendations = await aiRecommendationEngine.generateRecommendations({
+      userId,
+      budget: userProfile.weeklyBudget,
+      maxItems: limit,
+      dietaryRestrictions: userProfile.dietaryRestrictions || [],
+      allergies: userProfile.allergies || [],
+      sustainabilityImportance: userProfile.sustainabilityImportance || 5,
+    });
 
-    // Transform and score products
-    const scoredProducts = recommendedProducts.map((product: any) => {
-      let score = 0;
-      
-      // Base score from user preferences
-      const preference = userPreferences.find(p => 
-        p.category === product.category || 
-        p.itemName.toLowerCase().includes(product.name.toLowerCase())
-      );
-      
-      if (preference) {
-        score += preference.preference * 10;
-      }
-
-      // Sustainability bonus
-      if (product.isOrganic) score += 2;
-      if (product.isLocal) score += 2;
-      if (product.isSeasonal) score += 1;
-      
-      // Carbon footprint bonus (lower is better)
-      if (product.carbonFootprint && product.carbonFootprint < 1) score += 3;
-      else if (product.carbonFootprint && product.carbonFootprint < 2) score += 2;
-
-      // Budget consideration
-      const priceInDollars = product.price / 100;
-      const weeklyBudget = userProfile.weeklyBudget / 100;
-      if (priceInDollars <= weeklyBudget * 0.1) score += 1; // Good price relative to budget
-
+    // Transform recommendations for response
+    const transformedProducts = recommendations.map((product) => {
+      const { confidence, ...rest } = product;
       return {
-        ...product,
-        price: priceInDollars,
-        unitPrice: priceInDollars,
-        recommendationScore: score,
-        carbonFootprint: product.carbonFootprint || 0,
+        ...rest,
+        confidence,
+        recommendationScore: confidence / 100,
+        carbonFootprint: 0, // Default to 0 since we don't have this data yet
         images: Array.isArray((product as any).images) ? (product as any).images : []
       };
     });
 
     // Sort by recommendation score
-    scoredProducts.sort((a, b) => b.recommendationScore - a.recommendationScore);
+    transformedProducts.sort((a, b) => b.recommendationScore - a.recommendationScore);
 
-    console.log(`Recommendations API - Returning ${scoredProducts.length} products for user ${userId}`);
+    console.log(`Recommendations API - Returning ${transformedProducts.length} products for user ${userId}`);
     
     return NextResponse.json({ 
-      products: scoredProducts,
+      products: transformedProducts,
       userProfile: {
         dietaryRestrictions: userProfile.dietaryRestrictions,
         sustainabilityImportance: userProfile.sustainabilityImportance,

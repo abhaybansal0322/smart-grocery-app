@@ -1,32 +1,56 @@
-import { getCollection } from './db'
+import { getCollection } from './db';
+import { geminiEngine } from './gemini';
+
+interface UserPreference {
+  userId: string;
+  category: string;
+  itemName: string;
+  preference: number;
+  frequency: number;
+  lastPurchased: Date;
+}
+
+interface Rating {
+  userId: string;
+  productId: string;
+  rating: number;
+  review?: string;
+}
 
 export interface RecommendationItem {
-  productId: string
-  name: string
-  category: string
-  price: number
-  confidence: number
-  reason: string
-  imageUrl?: string
-  images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>
+  productId: string;
+  name: string;
+  category: string;
+  price: number;
+  confidence: number;
+  reason: string;
+  imageUrl?: string;
+  images?: Array<{ url: string; alt?: string; isPrimary?: boolean }>;
+  aiRecommended?: boolean;
+  carbonFootprint?: number;
+  recommendationScore?: number;
 }
 
 export interface AIRecommendationParams {
-  userId: string
-  budget: number
-  maxItems: number
-  dietaryRestrictions: string[]
-  allergies: string[]
-  sustainabilityImportance: number
+  userId: string;
+  budget: number;
+  maxItems: number;
+  dietaryRestrictions: string[];
+  allergies: string[];
+  sustainabilityImportance: number;
 }
 
 export class AIRecommendationEngine {
+  constructor() { }
+
   private async getUserPreferences(userId: string) {
-    const Preferences = await getCollection('UserPreference')
-    const Ratings = await getCollection('Rating')
-    const preferences = await Preferences.find({ userId } as any).sort({ preference: -1 }).toArray()
-    const ratings = await Ratings.find({ userId } as any).toArray()
-    return { preferences, ratings, feedback: [] }
+    const Preferences = await getCollection('UserPreference');
+    const Ratings = await getCollection('Rating');
+    
+    const preferences = await Preferences.find({ userId }).sort({ preference: -1 }).toArray() as unknown as UserPreference[];
+    const ratings = await Ratings.find({ userId }).toArray() as unknown as Rating[];
+    
+    return { preferences, ratings, feedback: [] };
   }
 
   private calculateProductScore(
@@ -91,50 +115,48 @@ export class AIRecommendationEngine {
     } as any).sort({ createdAt: -1 }).toArray()
   }
 
-  public async generateRecommendations(params: AIRecommendationParams): Promise<RecommendationItem[]> {
-    const { userId, budget, maxItems, dietaryRestrictions, allergies, sustainabilityImportance } = params
+  private async getCurrentBox(userId: string) {
+    const Boxes = await getCollection('Box');
+    const box = await Boxes.findOne({ userId } as any);
+    return box ? {
+      items: (box.items || []).map((item: any) => ({
+        name: item.name,
+        quantity: item.quantity,
+        category: item.category
+      }))
+    } : { items: [] };
+  }
 
-    // Get user data
-    const { preferences, ratings } = await this.getUserPreferences(userId)
-    
-    // Get user profile for additional context
-    const Profiles = await getCollection('UserProfile')
-    const userProfile = await Profiles.findOne({ userId } as any)
-
-    // Determine categories based on preferences and dietary restrictions
-    const categories = this.getRelevantCategories(preferences, dietaryRestrictions)
-    
-    // Get available products
-    const availableProducts = await this.getAvailableProducts(categories, budget)
-
-    // Filter out products with allergens
-    const safeProducts = availableProducts.filter(product => 
-      !this.containsAllergens(product, allergies)
-    )
-
+  private async getTraditionalRecommendations(
+    products: any[],
+    preferences: UserPreference[],
+    ratings: Rating[],
+    sustainabilityImportance: number,
+    maxItems: number
+  ): Promise<RecommendationItem[]> {
     // Score and rank products
-    const scoredProducts = safeProducts.map(product => {
+    const scoredProducts = products.map((product) => {
       const { score, reason } = this.calculateProductScore(
-        product, 
-        preferences, 
-        ratings, 
+        product,
+        preferences,
+        ratings,
         sustainabilityImportance
-      )
-      
+      );
+
       return {
         ...product,
         score,
-        reason
-      }
-    })
+        reason,
+      };
+    });
 
     // Sort by score and take top recommendations
     const topProducts = scoredProducts
       .sort((a, b) => b.score - a.score)
-      .slice(0, maxItems)
+      .slice(0, maxItems);
 
     // Convert to recommendation format
-    const recommendations: RecommendationItem[] = topProducts.map((product: any) => ({
+    return topProducts.map((product: any) => ({
       productId: String(product.id ?? product._id),
       name: String(product.name),
       category: String(product.category),
@@ -142,10 +164,155 @@ export class AIRecommendationEngine {
       confidence: Math.round(Number(product.score) * 100),
       reason: String(product.reason || ''),
       imageUrl: (product.images && product.images[0]?.url) || product.imageUrl,
-      images: product.images
-    }))
+      images: product.images,
+      aiRecommended: false,
+    }));
+  }
 
-    return recommendations
+  private combineRecommendations(
+    traditional: RecommendationItem[],
+    gemini: RecommendationItem[],
+    maxItems: number
+  ): RecommendationItem[] {
+    // Create a map to track products by ID
+    const productMap = new Map<string, RecommendationItem>();
+
+    // Add traditional recommendations
+    traditional.forEach((rec) => {
+      productMap.set(rec.productId, rec);
+    });
+
+    // Add or merge Gemini recommendations
+    gemini.forEach((rec) => {
+      if (productMap.has(rec.productId)) {
+        // If product exists in both, merge the reasons and take the higher confidence
+        const existing = productMap.get(rec.productId)!;
+        productMap.set(rec.productId, {
+          ...existing,
+          confidence: Math.max(existing.confidence, rec.confidence),
+          reason: `${existing.reason}. ${rec.reason}`,
+          aiRecommended: true,
+        });
+      } else {
+        productMap.set(rec.productId, rec);
+      }
+    });
+
+    // Convert back to array and sort by confidence
+    return Array.from(productMap.values())
+      .filter((rec): rec is RecommendationItem => 
+        rec !== null && 
+        typeof rec.productId === 'string' &&
+        typeof rec.name === 'string' &&
+        typeof rec.category === 'string' &&
+        typeof rec.price === 'number' &&
+        typeof rec.confidence === 'number' &&
+        typeof rec.reason === 'string'
+      )
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, maxItems);
+  }
+
+  public async generateRecommendations(
+    params: AIRecommendationParams
+  ): Promise<RecommendationItem[]> {
+    const {
+      userId,
+      budget,
+      maxItems,
+      dietaryRestrictions,
+      allergies,
+      sustainabilityImportance,
+    } = params;
+
+    // Get user data
+    const { preferences, ratings } = await this.getUserPreferences(userId);
+
+    // Get user profile for additional context
+    const Profiles = await getCollection('UserProfile');
+    const userProfile = await Profiles.findOne({ userId } as any);
+
+    // Get current box
+    const currentBox = await this.getCurrentBox(userId);
+
+    // Determine categories based on preferences and dietary restrictions
+    const categories = this.getRelevantCategories(preferences, dietaryRestrictions);
+
+    // Get available products
+    const availableProducts = await this.getAvailableProducts(categories, budget);
+
+    // Filter out products with allergens
+    const safeProducts = availableProducts.filter(
+      (product) => !this.containsAllergens(product, allergies)
+    );
+
+    // Get recommendations from both traditional algorithm and Gemini
+    const [traditionalRecs, geminiRecs] = await Promise.all([
+      // Traditional scoring
+      this.getTraditionalRecommendations(
+        safeProducts,
+        preferences,
+        ratings,
+        sustainabilityImportance,
+        maxItems
+      ),
+      // Gemini-powered recommendations
+      (async () => {
+        const recs = await geminiEngine.generateRecommendations({
+          currentBox,
+          userPreferences: {
+            dietaryRestrictions,
+            allergies,
+            sustainabilityImportance,
+            weeklyBudget: budget,
+          },
+          availableProducts: safeProducts.map((product: any) => ({
+            id: String(product.id ?? product._id),
+            name: String(product.name),
+            category: String(product.category),
+            price: Number(product.price),
+            isOrganic: Boolean(product.isOrganic),
+            isLocal: Boolean(product.isLocal),
+            description: String(product.description || '')
+          })),
+        });
+        // Filter out nulls and ensure all required fields exist
+        const validRecs = recs.filter((rec): rec is NonNullable<typeof rec> => 
+          rec !== null &&
+          typeof rec === 'object' &&
+          'productId' in rec &&
+          'name' in rec &&
+          'category' in rec &&
+          'price' in rec &&
+          'confidence' in rec &&
+          'reason' in rec
+        );
+        
+        // Map to RecommendationItem type
+        return validRecs.map(rec => ({
+          productId: rec.productId,
+          name: rec.name,
+          category: rec.category,
+          price: rec.price,
+          confidence: rec.confidence,
+          reason: rec.reason,
+          imageUrl: undefined,
+          images: [],
+          aiRecommended: true,
+          carbonFootprint: 0,
+          recommendationScore: rec.confidence
+        }));
+      })(),
+    ]);
+
+    // Combine and deduplicate recommendations
+    const combinedRecs = this.combineRecommendations(
+      traditionalRecs,
+      geminiRecs,
+      maxItems
+    );
+
+    return combinedRecs;
   }
 
   private getRelevantCategories(preferences: any[], dietaryRestrictions: string[]): string[] {

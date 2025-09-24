@@ -13,6 +13,7 @@
     "db:update-images": "echo Local-only: update-images script removed"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@hookform/resolvers": "^3.9.0",
     "@next/swc-wasm-nodejs": "13.5.1",
     "@radix-ui/react-accordion": "^1.2.0",
@@ -83,4 +84,3 @@
     "tsx": "^4.20.3"
   }
 }
-

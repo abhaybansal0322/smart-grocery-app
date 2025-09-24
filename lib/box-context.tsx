@@ -26,6 +26,8 @@ interface BoxContextType {
   addToBox: (product: any) => void;
   removeFromBox: (productId: string) => void;
   refreshBox: () => void;
+  getAIRecommendations: () => Promise<any[]>;
+  applyAIRecommendations: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -171,6 +173,70 @@ export function BoxProvider({ children }: { children: ReactNode }) {
     fetchCurrentBox();
   }, [fetchCurrentBox]);
 
+  const getAIRecommendations = useCallback(async () => {
+    if (!token) return [];
+    
+    try {
+      const response = await fetch('/api/recommendations/ai', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        return data.products || [];
+      }
+      return [];
+    } catch (error) {
+      console.error('Error getting AI recommendations:', error);
+      return [];
+    }
+  }, [token]);
+
+  const applyAIRecommendations = useCallback(async () => {
+    if (!token || !currentBox) return;
+    
+    try {
+      // Get AI recommendations
+      const recommendations = await getAIRecommendations();
+      
+      if (recommendations.length === 0) return;
+
+      // Add recommended items to box
+      const updatedBox = { ...currentBox };
+      let addedCount = 0;
+
+      for (const rec of recommendations) {
+        // Only add up to 5 AI recommendations
+        if (addedCount >= 5) break;
+
+        // Skip if item already in box
+        if (updatedBox.items.some(item => item.id === rec.id)) continue;
+
+        updatedBox.items.push({
+          id: rec.id,
+          name: rec.name,
+          quantity: 1,
+          price: rec.price,
+          category: rec.category,
+          imageUrl: rec.imageUrl,
+          organic: rec.isOrganic,
+        });
+
+        addedCount++;
+      }
+
+      // Update total
+      updatedBox.total = updatedBox.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+      // Save updated box
+      await updateCurrentBox(updatedBox);
+    } catch (error) {
+      console.error('Error applying AI recommendations:', error);
+    }
+  }, [token, currentBox, getAIRecommendations, updateCurrentBox]);
+
   useEffect(() => {
     if (token) {
       fetchCurrentBox();
@@ -192,6 +258,8 @@ export function BoxProvider({ children }: { children: ReactNode }) {
       addToBox,
       removeFromBox,
       refreshBox,
+      getAIRecommendations,
+      applyAIRecommendations,
       isLoading
     }}>
       {children}
