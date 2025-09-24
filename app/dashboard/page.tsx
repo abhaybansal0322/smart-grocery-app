@@ -84,7 +84,7 @@ export default function Dashboard() {
       
       if (response.ok) {
         const data = await response.json();
-        setRecommendations(data.recommendations || []);
+        setRecommendations(data.products || data.recommendations || []);
         setSubscription(data.subscription);
       } else {
         setRecommendations([]);

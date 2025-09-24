@@ -1,11 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Initialize Gemini AI
-if (!process.env.GEMINI_API_KEY) {
-  throw new Error('GEMINI_API_KEY environment variable is not set');
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Gemini AI (lazily and without throwing at import time)
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;
 
 export interface GeminiRecommendationParams {
   currentBox: {
@@ -33,13 +30,15 @@ export interface GeminiRecommendationParams {
 }
 
 export class GeminiRecommendationEngine {
-  private readonly model = genAI.getGenerativeModel({ 
-    model: "gemini-2.5-flash",
-    generationConfig: {
-      temperature: 0.7,
-      maxOutputTokens: 1024,
-    }
-  });
+  private readonly model = genAI
+    ? genAI.getGenerativeModel({
+        model: "gemini-2.5-flash",
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        }
+      })
+    : null;
 
   public async generateRecommendations({
     currentBox,
@@ -47,6 +46,23 @@ export class GeminiRecommendationEngine {
     availableProducts,
   }: GeminiRecommendationParams) {
     try {
+      // Fallback immediately if Gemini is not configured
+      if (!this.model) {
+        console.warn('Gemini API key is not set. Returning basic fallback recommendations.');
+        return availableProducts.slice(0, 5).map(product => ({
+          productId: product.id,
+          name: product.name,
+          category: product.category,
+          price: product.price,
+          confidence: 0.5,
+          reason: "Basic recommendation (Gemini API unavailable)",
+          imageUrl: undefined,
+          images: [],
+          aiRecommended: false,
+          carbonFootprint: 0
+        }));
+      }
+
       // Create a prompt for Gemini
       const prompt = this.createRecommendationPrompt(
         currentBox,
@@ -90,6 +106,18 @@ export class GeminiRecommendationEngine {
     userPreferences: GeminiRecommendationParams['userPreferences'],
     availableProducts: GeminiRecommendationParams['availableProducts']
   ): string {
+    const dietaryRestrictionsArray = Array.isArray(userPreferences.dietaryRestrictions)
+      ? userPreferences.dietaryRestrictions
+      : userPreferences.dietaryRestrictions
+        ? [String(userPreferences.dietaryRestrictions)]
+        : [];
+
+    const allergiesArray = Array.isArray(userPreferences.allergies)
+      ? userPreferences.allergies
+      : userPreferences.allergies
+        ? [String(userPreferences.allergies)]
+        : [];
+
     return `
 As a smart grocery recommendation system, analyze the following information and suggest products:
 
@@ -99,8 +127,8 @@ ${currentBox.items
   .join('\n')}
 
 User Preferences:
-- Dietary Restrictions: ${userPreferences.dietaryRestrictions.join(', ')}
-- Allergies: ${userPreferences.allergies.join(', ')}
+- Dietary Restrictions: ${dietaryRestrictionsArray.join(', ')}
+- Allergies: ${allergiesArray.join(', ')}
 - Sustainability Importance: ${userPreferences.sustainabilityImportance}/10
 - Weekly Budget: $${userPreferences.weeklyBudget / 100}
 
